@@ -165,7 +165,7 @@ class Resolver:
     def import_folder(self, folderpath: str, excluded_folders_names: Optional[List[str]] = None, excluded_files_extensions: Optional[List[str]] = None):
         folderpath_path = Path(folderpath)
         for root_dirpath, dirs, filenames in os.walk(folderpath, topdown=True):
-            # The topdown arg allow use to modify the dirs list in the walk, and so we can easily exclude folders.
+            # The topdown arg allow to modify the dirs list in the walk, and so we can easily exclude folders.
             dirs[:] = [dirpath for dirpath in dirs if Path(dirpath).name not in excluded_folders_names]
             relative_root_dirpath = os.path.join(folderpath_path.stem, root_dirpath.replace(folderpath, "").strip("\\").strip("/"))
             for filename in filenames:
