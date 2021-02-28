@@ -255,15 +255,3 @@ def make_no_os_matching_file_warning_message(system_os: Resolver.TARGETS_OS_LITE
         f"Make sure that you both have a compiled .{source_extension} and .{target_extension} file with the same names and paths. "
         f"Otherwise, try to compile your application on a {target_os} computer or virtual machine."
     )
-
-
-if __name__ == '__main__':
-    _resolver = Resolver(root_filepath="F:/Inoft/anvers_1944_project/inoft_vocal_engine/web_interface/applications/data_lake/efs_mutator/lambda_function.py", target_os='linux')
-    """_resolver.import_folder(folderpath="F:/Inoft/anvers_1944_project/inoft_vocal_framework", excluded_files_extensions=[".wav", ".mp3"], excluded_folders_names=[
-        "__pycache__", ".idea", ".git", "dist", "speech_synthesis", "temp", "tmp", "target", "build_lame", "src", "DOC_BUILD_CARGO", "lame-3.100"
-    ])"""
-    _resolver.process_file(_resolver.root_filepath)
-    print(_resolver)
-    from serverlesspack.packager import package_lambda_layer, package_files
-    # package_lambda_layer(_resolver.packages)
-    package_files(_resolver.files, "F:/Inoft/anvers_1944_project/inoft_vocal_engine/web_interface/applications/data_lake/efs_mutator")
