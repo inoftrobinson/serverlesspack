@@ -195,36 +195,10 @@ class Resolver:
                             self.process_file(filepath=imported_package_module_filepath, base_package_name=package_name)
 
     def process_node(self, node: Any, current_module: str, current_filepath: str):
-        if isinstance(node, ast.ImportFrom):
-            module = node.module or current_module
-            self.add_package_by_name(package_name=module, current_filepath=current_filepath)
-            for name_item in node.names:
-                self.add_package_by_name(package_name=f"{module}.{name_item.name}", current_filepath=current_filepath)
-
-        elif isinstance(node, ast.Import):  # excluding the 'as' part of import
-            for name_item in node.names:
-                self.add_package_by_name(package_name=name_item.name, current_filepath=current_filepath)
-
-        elif isinstance(node, ast.FunctionDef):
-            for child_node in node.body:
-                child_node_single_name: Optional[str] = getattr(child_node, 'name', None)
-                self.process_node(node=child_node, current_module=child_node_single_name or current_module, current_filepath=current_filepath)
-
-                child_node_names: Optional[list] = getattr(child_node, 'names', None)
-                if child_node_names is not None:
-                    for child_node_name_item in child_node_names:
-                        child_node_name_item_value: Optional[str] = getattr(child_node_name_item, 'name', None)
-                        self.process_node(node=child_node, current_module=child_node_name_item_value or current_module, current_filepath=current_filepath)
-
-        elif isinstance(node, ast.ClassDef):
-            for child_node in node.body:
-                child_node_name_value: Optional[str] = getattr(child_node, 'name', None)
-                self.process_node(node=child_node, current_module=child_node_name_value or current_module, current_filepath=current_filepath)
-
-        elif isinstance(node, ast.If):
-            for child_node in node.body:
-                child_node_single_name: Optional[str] = getattr(child_node, 'name', None)
-                self.process_node(node=child_node, current_module=child_node_single_name or current_module, current_filepath=current_filepath)
+        from serverlesspack.process_node_handlers import process_node_handlers_switch
+        handler = process_node_handlers_switch.get(node.__class__, None)
+        if handler is not None:
+            handler(self, node, current_module, current_filepath)
         else:
             print(f"Node {node.__class__} not supported")
 
@@ -272,7 +246,7 @@ def make_no_os_matching_file_warning_message(system_os: Resolver.TARGETS_OS_LITE
 
 
 if __name__ == '__main__':
-    _resolver = Resolver(root_filepath="F:/Inoft/anvers_1944_project/inoft_vocal_engine/web_interface/applications/data_lake/efs_mutator/lambda_function.py", target_os=Resolver.LINUX_KEY)
+    _resolver = Resolver(root_filepath="F:/Inoft/anvers_1944_project/inoft_vocal_engine/web_interface/applications/data_lake/efs_mutator/lambda_function.py", target_os='linux')
     """_resolver.import_folder(folderpath="F:/Inoft/anvers_1944_project/inoft_vocal_framework", excluded_files_extensions=[".wav", ".mp3"], excluded_folders_names=[
         "__pycache__", ".idea", ".git", "dist", "speech_synthesis", "temp", "tmp", "target", "build_lame", "src", "DOC_BUILD_CARGO", "lame-3.100"
     ])"""
