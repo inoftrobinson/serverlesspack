@@ -8,6 +8,7 @@ import distlib.database
 from pathlib import Path
 from typing import List, TypedDict, Optional, Dict, Set, Any, Literal, Tuple
 
+from StructNoSQL.practical_logger import message_with_vars
 from pkg_resources import EggInfoDistribution
 from serverlesspack.utils import get_serverless_pack_root_folder
 
@@ -36,9 +37,6 @@ def get_package_relative_filepath(absolute_filepath: str, package_name: str) -> 
             if part == package_name_splits[0]:
                 return os.path.join(*filepath_parts[i:])
     return None
-
-def get_file_relative_filepath():
-    return ""
 
 class Resolver:
     WINDOWS_KEY = 'windows'
@@ -86,43 +84,60 @@ class Resolver:
             file.write(code)
         return filepath_temp_code_file
 
-    def _import_module(self, module_name: str, filepath: str) -> Tuple[Optional[ModuleType], Optional[str]]:
+    @staticmethod
+    def _remove_junk_start_of_path(path: str) -> Tuple[str]:
+        parts = Path(path).parts
+        if len(parts) > 0:
+            if parts[0] in [".", ".."]:
+                parts = parts[1:]
+        return parts
+
+    def _path_to_module_path(self, base_path: str, module_name: str) -> Tuple[Optional[str], Optional[str]]:
+        cleaned_base_path_parts = self._remove_junk_start_of_path(path=base_path)
+        if len(cleaned_base_path_parts) > 0:
+            module_path = "."
+            if len(cleaned_base_path_parts) > 1:
+                module_path += f"{'.'.join(cleaned_base_path_parts[1:])}."
+            module_path += module_name
+            return module_path, cleaned_base_path_parts[0]
+        return None, None
+
+    def _get_relative_filepath(self, filepath: str) -> Optional[str]:
+        relative_filepath = os.path.relpath(filepath, self.root_filepath)
+        cleaned_relative_filepath_parts = self._remove_junk_start_of_path(path=relative_filepath)
+        return os.path.join(*cleaned_relative_filepath_parts) if len(cleaned_relative_filepath_parts) > 0 else None
+
+    def _import_module(self, module_name: str, filepath: str) -> Optional[ModuleType]:
         try:
-            return importlib.import_module(module_name), module_name
+            # We first try to import the module naively with only their
+            # module name. This will work when trying to import libraries.
+            return importlib.import_module(module_name)
         except ModuleNotFoundError as e:
+            # If this failed, we try to import the module as a file not inside a library. We do so by creating a relative
+            # module path to the module from the current file, and we try to import the module from its relative path.
             try:
-                d = os.path.relpath(os.path.dirname(filepath), os.path.abspath(os.path.dirname(__file__)))
-                parts_old = Path(d).parts
-                parts = Path(d).parts
-                if len(parts) > 0:
-                    if parts[0] in [".", ".."]:
-                        parts = parts[1:]
-                reconstructed = os.path.join(*parts, f"{module_name}.py")
-                if len(parts) > 0:
-                    name = "."
-                    if len(parts) > 1:
-                        name += f"{'.'.join(parts[1:])}."
-                    name += module_name
-                    return importlib.import_module(name=name, package=parts[0]), reconstructed
+                filepath_relative_to_current_module = os.path.relpath(os.path.dirname(filepath), os.path.abspath(os.path.dirname(__file__)))
+                # We need a filepath relative to the current module, in order to try to import the file module. All the imports done in a file must be relative
+                # to the file trying to import the module. This relative filepath is not destined to be used in the archive paths when packaging the code.
+                module_path, module_package = self._path_to_module_path(base_path=str(filepath_relative_to_current_module), module_name=module_name)
+                if module_path is not None and module_package is not None:
+                    return importlib.import_module(name=module_path, package=module_package)
                 else:
-                    print("no")
-                    return None, None
+                    return None
             except ModuleNotFoundError as e:
-                print(e)
-                return None, None
+                # If both the import as a library and as a file unfortunately
+                # failed, we can stop trying to import the module.
+                print(message_with_vars(
+                    message="Importing of module failed as both a library import and file import",
+                    vars_dict={'module_name': module_name, 'exception': e}
+                ))
+                return None
 
     def add_package_by_name(self, package_name: str, current_filepath: str):
-        if "s3_client" in package_name:
-            print("e")
-            """try:
-                loader = importlib.import_module(name="S3Client", package="inoft_vocal_engine.web_interface.applications.data_lake.efs_mutator.s3_client")
-            except ModuleNotFoundError as e:
-                print(e)
-            print(loader)"""
         if package_name in self.packages:
             return
 
-        imported_package_module, path = self._import_module(module_name=package_name, filepath=current_filepath)
+        imported_package_module = self._import_module(module_name=package_name, filepath=current_filepath)
         if imported_package_module is not None:
             imported_package_module_filepath: Optional[str] = getattr(imported_package_module, '__file__', None)
             if imported_package_module_filepath is not None:
@@ -167,18 +182,17 @@ class Resolver:
                                     absolute_filepath=imported_package_module_filepath,
                                     relative_filepath=package_relative_filepath,
                                 )
-                                self.gen(filepath=imported_package_module_filepath, base_package_name=package_name)
+                                self.process_file(filepath=imported_package_module_filepath, base_package_name=package_name)
                     else:
                         # If the file is a standalone file not from a library
                         file_id = f"{package_name}{Path(imported_package_module_filepath).suffix}"
                         if file_id not in self.files:
-                            file_relative_filepath_parts = Path(os.path.relpath(imported_package_module_filepath, self.root_filepath)).parts
-                            file_relative_filepath = os.path.join(*file_relative_filepath_parts[1:]) if len(file_relative_filepath_parts) > 1 else None
+                            file_relative_filepath = self._get_relative_filepath(filepath=imported_package_module_filepath)
                             self.files[file_id] = PackageItem(
                                 absolute_filepath=imported_package_module_filepath,
                                 relative_filepath=file_relative_filepath,
                             )
-                            self.gen(filepath=imported_package_module_filepath, base_package_name=package_name)
+                            self.process_file(filepath=imported_package_module_filepath, base_package_name=package_name)
 
     def process_node(self, node: Any, current_module: str, current_filepath: str):
         if isinstance(node, ast.ImportFrom):
@@ -214,11 +228,10 @@ class Resolver:
         else:
             print(f"Node {node.__class__} not supported")
 
-    def gen(self, filepath: str, base_package_name: Optional[str] = None):
+    def process_file(self, filepath: str, base_package_name: Optional[str] = None):
         filepath = Path(filepath)
         if not filepath.exists():
             raise Exception(f"Filepath does not exist : {str(filepath)}")
-        root_dirpath = filepath.parent
 
         if filepath.suffix == '.py':
             file = filepath.open('r')
@@ -263,7 +276,7 @@ if __name__ == '__main__':
     """_resolver.import_folder(folderpath="F:/Inoft/anvers_1944_project/inoft_vocal_framework", excluded_files_extensions=[".wav", ".mp3"], excluded_folders_names=[
         "__pycache__", ".idea", ".git", "dist", "speech_synthesis", "temp", "tmp", "target", "build_lame", "src", "DOC_BUILD_CARGO", "lame-3.100"
     ])"""
-    _resolver.gen(_resolver.root_filepath)
+    _resolver.process_file(_resolver.root_filepath)
     print(_resolver)
     from serverlesspack.packager import package_lambda_layer, package_files
     # package_lambda_layer(_resolver.packages)

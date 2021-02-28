@@ -10,7 +10,7 @@ from serverlesspack.packager import package_files
 def package(target_os: str, config_filepath: str):
     config = ConfigClient().load_render_config_file(filepath=config_filepath, target_os=target_os)
     resolver = Resolver(root_filepath=config.root_filepath, target_os=target_os)
-    resolver.gen(config.root_filepath)
+    resolver.process_file(config.root_filepath)
     for folderpath, folder_config in config.folders_includes.items():
         resolver.import_folder(
             folderpath=folderpath,
