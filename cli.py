@@ -10,7 +10,10 @@ from serverlesspack.packager import package_files, package_lambda_layer
 @click.option('-os', '--target_os', prompt="OS to compile to", type=click.Choice(['windows', 'linux']))
 @click.option('-config', '--config_filepath', prompt="Filepath of config file", type=click.Path(exists=True))
 @click.option('-v', '--verbose', type=bool)
-def package(target_os: str, config_filepath: str, verbose: bool):
+def package_cli(target_os: str, config_filepath: str, verbose: bool):
+    package_api(target_os=target_os, config_filepath=config_filepath, verbose=verbose)
+
+def package_api(target_os: str, config_filepath: str, verbose: bool):
     config = ConfigClient(verbose=verbose).load_render_config_file(filepath=config_filepath, target_os=target_os)
     resolver = Resolver(root_filepath=config.root_filepath, target_os=target_os, verbose=verbose)
     resolver.process_file(config.root_filepath)
@@ -37,4 +40,4 @@ def package(target_os: str, config_filepath: str, verbose: bool):
 
 
 if __name__ == '__main__':
-    package()
+    package_cli()
