@@ -47,27 +47,28 @@ class ConfigClient:
 
         config = Config(root_filepath=rendered_absolute_root_filepath, folders_includes=dict())
 
-        for folderpath, folder_config in source_config.folders_includes.items():
-            output_config_folder_include_item = BaseFolderIncludeItem()
-            def render_folder_include_item(os_additional_folder_settings: Optional[BaseFolderIncludeItem]):
-                if os_additional_folder_settings is not None:
-                    output_config_folder_include_item.excluded_folders_names = [
-                        *folder_config.excluded_folders_names, *(os_additional_folder_settings.excluded_folders_names or [])
-                    ]
-                    output_config_folder_include_item.excluded_files_extensions = [
-                        *folder_config.excluded_files_extensions, *(os_additional_folder_settings.excluded_files_extensions or [])
-                    ]
+        if source_config.folders_includes is not None:
+            for folderpath, folder_config in source_config.folders_includes.items():
+                output_config_folder_include_item = BaseFolderIncludeItem()
+                def render_folder_include_item(os_additional_folder_settings: Optional[BaseFolderIncludeItem]):
+                    if os_additional_folder_settings is not None:
+                        output_config_folder_include_item.excluded_folders_names = [
+                            *folder_config.excluded_folders_names, *(os_additional_folder_settings.excluded_folders_names or [])
+                        ]
+                        output_config_folder_include_item.excluded_files_extensions = [
+                            *folder_config.excluded_files_extensions, *(os_additional_folder_settings.excluded_files_extensions or [])
+                        ]
 
-            if target_os == 'windows':
-                render_folder_include_item(os_additional_folder_settings=folder_config.additional_windows)
-            elif target_os == 'linux':
-                render_folder_include_item(os_additional_folder_settings=folder_config.additional_linux)
+                if target_os == 'windows':
+                    render_folder_include_item(os_additional_folder_settings=folder_config.additional_windows)
+                elif target_os == 'linux':
+                    render_folder_include_item(os_additional_folder_settings=folder_config.additional_linux)
 
-            rendered_absolute_folder_path = os.path.abspath(os.path.join(os.path.dirname(config_filepath), folderpath))
-            if not os.path.exists(rendered_absolute_folder_path):
-                raise Exception(f"No folder found at {rendered_absolute_folder_path}")
+                rendered_absolute_folder_path = os.path.abspath(os.path.join(os.path.dirname(config_filepath), folderpath))
+                if not os.path.exists(rendered_absolute_folder_path):
+                    raise Exception(f"No folder found at {rendered_absolute_folder_path}")
 
-            config.folders_includes[rendered_absolute_folder_path] = output_config_folder_include_item
+                config.folders_includes[rendered_absolute_folder_path] = output_config_folder_include_item
         return config
 
 

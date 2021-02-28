@@ -52,8 +52,7 @@ class PackagesLockClient:
                     )
         print(self.requirements_modules)
 
-    def
-        (self, module_name: str) -> Optional[ModuleType]:
+    def _import_module(self, module_name: str) -> Optional[ModuleType]:
         try:
             return importlib.import_module(module_name)
         except ModuleNotFoundError as e:

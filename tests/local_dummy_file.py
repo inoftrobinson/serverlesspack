@@ -1,0 +1,2 @@
+class LocalDummyObject:
+    pass
