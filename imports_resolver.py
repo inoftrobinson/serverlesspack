@@ -8,7 +8,7 @@ import distlib.database
 from pathlib import Path
 from typing import List, TypedDict, Optional, Dict, Set, Any, Literal, Tuple
 
-from StructNoSQL.practical_logger import message_with_vars
+from serverlesspack.utils import message_with_vars
 from pkg_resources import EggInfoDistribution
 from serverlesspack.utils import get_serverless_pack_root_folder
 
