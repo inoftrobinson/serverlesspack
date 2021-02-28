@@ -24,8 +24,8 @@ class Config:
 
 
 class ConfigClient:
-    def __init__(self):
-        pass
+    def __init__(self, verbose: bool = False):
+        self.verbose = verbose
 
     def load_render_config_file(self, filepath: str, target_os: str) -> Config:
         if not os.path.exists(filepath):

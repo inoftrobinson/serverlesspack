@@ -14,7 +14,7 @@ from serverlesspack.utils import get_serverless_pack_root_folder
 
 
 serverless_pack_root_folder = get_serverless_pack_root_folder()
-python_base_libs_folder_path = str(Path(os.__file__).parent)
+python_base_libs_folder_path = str(Path(os.__file__).parent.parent)
 
 class PackageItem(TypedDict):
     absolute_filepath: str
@@ -45,8 +45,10 @@ class Resolver:
     TARGETS_OS_LITERAL = Literal['windows', 'linux', None]
     OS_TO_COMPILED_EXTENSIONS = {WINDOWS_KEY: 'pyd', LINUX_KEY: 'so'}
 
-    def __init__(self, root_filepath: str, target_os: Optional[TARGETS_OS_LITERAL] = None):
+    def __init__(self, root_filepath: str, target_os: Optional[TARGETS_OS_LITERAL] = None, verbose: bool = False):
         self.root_filepath = root_filepath
+        self.verbose = verbose
+
         self.system_os = platform.system().lower()
         if target_os is not None:
             self.target_os = target_os
@@ -67,6 +69,10 @@ class Resolver:
                 relative_filepath=Path(self.root_filepath).name,
             )
         }
+
+    def _verbose_print(self, message: str):
+        if self.verbose is True:
+            print(message)
 
     @staticmethod
     def from_code(code: str, target_os: Optional[TARGETS_OS_LITERAL] = None, dirpath: Optional[str] = None):
@@ -127,7 +133,7 @@ class Resolver:
             except ModuleNotFoundError as e:
                 # If both the import as a library and as a file unfortunately
                 # failed, we can stop trying to import the module.
-                print(message_with_vars(
+                self._verbose_print(message_with_vars(
                     message="Importing of module failed as both a library import and file import",
                     vars_dict={'module_name': module_name, 'exception': e}
                 ))
@@ -149,7 +155,7 @@ class Resolver:
                             path_imported_package_module_filepath = path_imported_package_module_filepath.with_suffix('.so')
                             imported_package_module_filepath = str(path_imported_package_module_filepath)
                             if not path_imported_package_module_filepath.is_file():
-                                print(make_no_os_matching_file_warning_message(
+                                self._verbose_print(make_no_os_matching_file_warning_message(
                                     system_os=self.system_os, target_os=self.target_os,
                                     source_filepath=path_imported_package_module_filepath
                                 ))
@@ -159,7 +165,7 @@ class Resolver:
                             path_imported_package_module_filepath = path_imported_package_module_filepath.with_suffix('.pyd')
                             imported_package_module_filepath = str(path_imported_package_module_filepath)
                             if not path_imported_package_module_filepath.is_file():
-                                print(make_no_os_matching_file_warning_message(
+                                self._verbose_print(make_no_os_matching_file_warning_message(
                                     system_os=self.system_os, target_os=self.target_os,
                                     source_filepath=path_imported_package_module_filepath
                                 ))
@@ -200,7 +206,7 @@ class Resolver:
         if handler is not None:
             handler(self, node, current_module, current_filepath)
         else:
-            print(f"Node {node.__class__} not supported")
+            self._verbose_print(f"Node {node.__class__} not supported")
 
     def process_file(self, filepath: str, base_package_name: Optional[str] = None):
         filepath = Path(filepath)

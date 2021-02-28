@@ -24,13 +24,12 @@ def package_files(files: Dict[str, PackageItem], root_path: str):
 
         import zipfile
         with zipfile.ZipFile(output_zip_filepath, "w") as zip_object:
-            click.echo("Zipping files...")
             num_files_to_zip = len(files_list)
-            for i in tqdm(range(num_files_to_zip)):
+            for i in tqdm(range(num_files_to_zip), desc="Zipping files"):
                 file_data = files_list[i]
                 filepath = file_data['absolute_filepath']
                 archive_name = file_data['relative_filepath']
                 zip_object.write(filename=filepath, arcname=archive_name)
 
-        click.echo(f"Packaged zipped file available at {output_zip_filepath}")
+        click.secho(f"Packaged zipped file available at {output_zip_filepath}", fg='green')
 
