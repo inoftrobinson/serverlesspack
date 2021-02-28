@@ -61,6 +61,8 @@ class Resolver:
         else:
             raise Exception(f"OS {self.target_os} not supported")
 
+        from importlib_metadata import packages_distributions
+        self.packages_distributions = packages_distributions()
         self.distribution_path = distlib.database.DistributionPath(include_egg=True)
         self.packages: Dict[str, PackageItem] = dict()
         self.files: Dict[str, PackageItem] = {
@@ -175,20 +177,24 @@ class Resolver:
                     if package_distribution_name is not None:
                         # If the file has been found inside a library
                         if package_distribution_name not in self.packages:
-                            package_distribution: Optional[EggInfoDistribution] = self.distribution_path.get_distribution(package_distribution_name)
-                            if package_distribution is not None:
-                                package_requirements: Set[str] = getattr(package_distribution, 'run_requires', set())
-                                # todo: do something with the package_requirements ?
+                            real_package_name_container: Optional[List[str]] = self.packages_distributions.get(package_distribution_name, None)
+                            if real_package_name_container is not None and len(real_package_name_container) > 0:
+                                real_package_name = real_package_name_container[0]
 
-                            if package_distribution_name not in self.packages:
-                                package_relative_filepath = get_package_relative_filepath(
-                                    absolute_filepath=imported_package_module_filepath, package_name=package_name
-                                )
-                                self.packages[package_distribution_name] = PackageItem(
-                                    absolute_filepath=imported_package_module_filepath,
-                                    relative_filepath=package_relative_filepath,
-                                )
-                                self.process_file(filepath=imported_package_module_filepath, base_package_name=package_name)
+                                package_distribution: Optional[EggInfoDistribution] = self.distribution_path.get_distribution(real_package_name)
+                                if package_distribution is not None:
+                                    package_requirements: Set[str] = getattr(package_distribution, 'run_requires', set())
+                                    # todo: do something with the package_requirements ?
+
+                                if real_package_name not in self.packages:
+                                    package_relative_filepath = get_package_relative_filepath(
+                                        absolute_filepath=imported_package_module_filepath, package_name=package_name
+                                    )
+                                    self.packages[real_package_name] = PackageItem(
+                                        absolute_filepath=imported_package_module_filepath,
+                                        relative_filepath=package_relative_filepath,
+                                    )
+                                    self.process_file(filepath=imported_package_module_filepath, base_package_name=package_name)
                     else:
                         # If the file is a standalone file not from a library
                         file_id = f"{package_name}{Path(imported_package_module_filepath).suffix}"

@@ -8,10 +8,10 @@ from tqdm import tqdm
 from serverlesspack.imports_resolver import PackageItem
 
 
-def package_lambda_layer(packages: Dict[str, PackageItem]):
+def package_lambda_layer(packages: Dict[str, PackageItem], target_dirpath: str, python_version: str):
     packages_string = " ".join(packages.keys())
-    root_target_folder = "F:/Inoft/anvers_1944_project/inoft_vocal_framework/scripts/serverlesspack/dist"
-    result = subprocess.run(f'pip install {packages_string} --target="{root_target_folder}/python/lib/python3.8/site-packages"')
+    result = subprocess.run(f'pip install {packages_string} --target="{target_dirpath}/python/lib/python{python_version}/site-packages"')
+    return result
 
 
 def package_files(files: Dict[str, PackageItem], root_path: str):
