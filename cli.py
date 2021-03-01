@@ -28,7 +28,7 @@ def package_api(target_os: str, config_filepath: str, verbose: bool):
     if not os.path.exists(dist_dirpath):
         os.makedirs(dist_dirpath)
 
-    package_files(resolver.files, dist_dirpath)
+    package_files(resolver.included_files_absolute_paths, dist_dirpath)
 
     if click.confirm("Package the dependencies as lambda layer ?"):
         lambda_layer_dirpath = os.path.join(dist_dirpath, "lambda_layer")
@@ -36,7 +36,11 @@ def package_api(target_os: str, config_filepath: str, verbose: bool):
             text="For which Python version do you want to create the layer ?",
             type=click.Choice(['3.5', '3.6', '3.7', '3.8', '3.9']), confirmation_prompt=True
         )
-        package_lambda_layer(packages=resolver.packages, target_dirpath=lambda_layer_dirpath, python_version=selected_python_version)
+        package_lambda_layer(
+            packages_names=resolver.included_packages_names,
+            target_dirpath=lambda_layer_dirpath,
+            python_version=selected_python_version
+        )
 
 
 if __name__ == '__main__':

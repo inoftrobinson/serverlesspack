@@ -1,24 +1,21 @@
+import sys
 import os
 import ast
-import importlib
 import platform
+import importlib
+import importlib.util
+from pathlib import Path
 from types import ModuleType
+from typing import List, Optional, Set, Any, Literal, Tuple
 
 import distlib.database
-from pathlib import Path
-from typing import List, TypedDict, Optional, Dict, Set, Any, Literal, Tuple
-
-from serverlesspack.utils import message_with_vars
 from pkg_resources import EggInfoDistribution
-from serverlesspack.utils import get_serverless_pack_root_folder
+from serverlesspack.utils import get_serverless_pack_root_folder, message_with_vars
 
 
 serverless_pack_root_folder = get_serverless_pack_root_folder()
 python_base_libs_folder_path = str(Path(os.__file__).parent.parent)
 
-class PackageItem(TypedDict):
-    absolute_filepath: str
-    relative_filepath: str
 
 def get_distribution_name_of_package(package_filepath: str) -> Optional[str]:
     module_filepath_path = Path(package_filepath)
@@ -29,14 +26,6 @@ def get_distribution_name_of_package(package_filepath: str) -> Optional[str]:
                 return parents_parts[i+1] if len(parents_parts)-1 > i+1 else None
     return None
 
-def get_package_relative_filepath(absolute_filepath: str, package_name: str) -> Optional[str]:
-    package_name_splits = package_name.split(".", 1)
-    if len(package_name_splits) > 0:
-        filepath_parts = Path(absolute_filepath).parts
-        for i, part in enumerate(filepath_parts):
-            if part == package_name_splits[0]:
-                return os.path.join(*filepath_parts[i:])
-    return None
 
 class Resolver:
     WINDOWS_KEY = 'windows'
@@ -64,13 +53,8 @@ class Resolver:
         from importlib_metadata import packages_distributions
         self.packages_distributions = packages_distributions()
         self.distribution_path = distlib.database.DistributionPath(include_egg=True)
-        self.packages: Dict[str, PackageItem] = dict()
-        self.files: Dict[str, PackageItem] = {
-            '__root__': PackageItem(
-                absolute_filepath=self.root_filepath,
-                relative_filepath=Path(self.root_filepath).name,
-            )
-        }
+        self.included_packages_names: Set[str] = set()
+        self.included_files_absolute_paths: Set[str] = {self.root_filepath}
 
     def _verbose_print(self, message: str):
         if self.verbose is True:
@@ -100,20 +84,29 @@ class Resolver:
                 parts = parts[1:]
         return parts
 
-    def _path_to_module_path(self, base_path: str, module_name: str) -> Tuple[Optional[str], Optional[str]]:
-        cleaned_base_path_parts = self._remove_junk_start_of_path(path=base_path)
+    @staticmethod
+    def _path_to_module_path(base_path: str, module_name: str) -> Optional[str]:
+        cleaned_base_path_parts = Resolver._remove_junk_start_of_path(path=base_path)
         if len(cleaned_base_path_parts) > 0:
-            module_path = "."
-            if len(cleaned_base_path_parts) > 1:
-                module_path += f"{'.'.join(cleaned_base_path_parts[1:])}."
-            module_path += module_name
-            return module_path, cleaned_base_path_parts[0]
-        return None, None
+            module_package = cleaned_base_path_parts[0]
+            cleaned_base_path_parts = cleaned_base_path_parts[1:]
 
-    def _get_relative_filepath(self, filepath: str) -> Optional[str]:
-        relative_filepath = os.path.relpath(filepath, self.root_filepath)
-        cleaned_relative_filepath_parts = self._remove_junk_start_of_path(path=relative_filepath)
-        return os.path.join(*cleaned_relative_filepath_parts) if len(cleaned_relative_filepath_parts) > 0 else None
+            source_module_name_parts = Path(module_name.replace(".", "/")).parts[1:]
+            cleaned_module_name_parts = source_module_name_parts
+
+            module_path = ""
+            matching_paths = True
+            for i, base_path_part in enumerate(cleaned_base_path_parts):
+                module_path += f".{cleaned_base_path_parts[i]}"
+                if len(source_module_name_parts) > i:
+                    if matching_paths is True:
+                        if base_path_part == source_module_name_parts[i]:
+                            cleaned_module_name_parts = source_module_name_parts[i+1:]
+                        else:
+                            matching_paths = False
+
+            return f"{'.'.join(cleaned_module_name_parts)}"
+        return None
 
     def _import_module(self, module_name: str, filepath: str) -> Optional[ModuleType]:
         try:
@@ -123,32 +116,39 @@ class Resolver:
         except ModuleNotFoundError as e:
             # If this failed, we try to import the module as a file not inside a library. We do so by creating a relative
             # module path to the module from the current file, and we try to import the module from its relative path.
+
+            filepath_relative_to_current_module = os.path.relpath(filepath, sys.argv[0])
+            # We need a filepath relative to the current module, in order to try to import the file module. All the imports done in a file must be relative
+            # to the file trying to import the module. This relative filepath is not destined to be used in the archive paths when packaging the code.
+            module_path = self._path_to_module_path(base_path=filepath_relative_to_current_module, module_name=module_name)
+
             try:
-                filepath_relative_to_current_module = os.path.relpath(os.path.dirname(filepath), os.path.abspath(os.path.dirname(__file__)))
-                # We need a filepath relative to the current module, in order to try to import the file module. All the imports done in a file must be relative
-                # to the file trying to import the module. This relative filepath is not destined to be used in the archive paths when packaging the code.
-                module_path, module_package = self._path_to_module_path(base_path=str(filepath_relative_to_current_module), module_name=module_name)
-                if module_path is not None and module_package is not None:
-                    return importlib.import_module(name=module_path, package=module_package)
-                else:
-                    return None
+                module_spec = importlib.util.spec_from_file_location(module_path, filepath_relative_to_current_module)
+                return importlib.util.module_from_spec(module_spec) if module_spec is not None else None
             except ModuleNotFoundError as e:
                 # If both the import as a library and as a file unfortunately
                 # failed, we can stop trying to import the module.
                 self._verbose_print(message_with_vars(
                     message="Importing of module failed as both a library import and file import",
-                    vars_dict={'module_name': module_name, 'exception': e}
+                    vars_dict={'module_name': module_name, 'module_path': module_path, 'exception': e}
                 ))
                 return None
 
-    def add_package_by_name(self, package_name: str, current_filepath: str):
-        if package_name in self.packages:
-            return
+    def add_python_file(self, filepath: str):
+        expected_init_filepath = os.path.join(os.path.dirname(filepath), "__init__.py")
+        if expected_init_filepath not in self.included_files_absolute_paths:
+            if os.path.exists(expected_init_filepath):
+                self.included_files_absolute_paths.add(expected_init_filepath)
 
+        if filepath not in self.included_files_absolute_paths:
+            self.included_files_absolute_paths.add(filepath)
+
+    def add_package_by_name(self, package_name: str, current_filepath: str):
         imported_package_module = self._import_module(module_name=package_name, filepath=current_filepath)
         if imported_package_module is not None:
             imported_package_module_filepath: Optional[str] = getattr(imported_package_module, '__file__', None)
             if imported_package_module_filepath is not None:
+                imported_package_module_filepath = os.path.abspath(os.path.join(*self._remove_junk_start_of_path(imported_package_module_filepath)))
                 if python_base_libs_folder_path not in imported_package_module_filepath:
                     path_imported_package_module_filepath = Path(imported_package_module_filepath)
 
@@ -176,35 +176,22 @@ class Resolver:
                     package_distribution_name = get_distribution_name_of_package(package_filepath=imported_package_module_filepath)
                     if package_distribution_name is not None:
                         # If the file has been found inside a library
-                        if package_distribution_name not in self.packages:
-                            real_package_name_container: Optional[List[str]] = self.packages_distributions.get(package_distribution_name, None)
-                            if real_package_name_container is not None and len(real_package_name_container) > 0:
-                                real_package_name = real_package_name_container[0]
-
+                        real_package_name_container: Optional[List[str]] = self.packages_distributions.get(package_distribution_name, None)
+                        if real_package_name_container is not None and len(real_package_name_container) > 0:
+                            real_package_name = real_package_name_container[0]
+                            if real_package_name not in self.included_packages_names:
                                 package_distribution: Optional[EggInfoDistribution] = self.distribution_path.get_distribution(real_package_name)
                                 if package_distribution is not None:
                                     package_requirements: Set[str] = getattr(package_distribution, 'run_requires', set())
                                     # todo: do something with the package_requirements ?
 
-                                if real_package_name not in self.packages:
-                                    package_relative_filepath = get_package_relative_filepath(
-                                        absolute_filepath=imported_package_module_filepath, package_name=package_name
-                                    )
-                                    self.packages[real_package_name] = PackageItem(
-                                        absolute_filepath=imported_package_module_filepath,
-                                        relative_filepath=package_relative_filepath,
-                                    )
-                                    self.process_file(filepath=imported_package_module_filepath, base_package_name=package_name)
+                                self.included_packages_names.add(real_package_name)
+                                self.process_file(filepath=imported_package_module_filepath)
                     else:
                         # If the file is a standalone file not from a library
-                        file_id = f"{package_name}{Path(imported_package_module_filepath).suffix}"
-                        if file_id not in self.files:
-                            file_relative_filepath = self._get_relative_filepath(filepath=imported_package_module_filepath)
-                            self.files[file_id] = PackageItem(
-                                absolute_filepath=imported_package_module_filepath,
-                                relative_filepath=file_relative_filepath,
-                            )
-                            self.process_file(filepath=imported_package_module_filepath, base_package_name=package_name)
+                        if imported_package_module_filepath not in self.included_files_absolute_paths:
+                            self.add_python_file(filepath=imported_package_module_filepath)
+                            self.process_file(filepath=imported_package_module_filepath)
 
     def process_node(self, node: Any, current_module: str, current_filepath: str):
         from serverlesspack.process_node_handlers import process_node_handlers_switch
@@ -214,38 +201,29 @@ class Resolver:
         else:
             self._verbose_print(f"Node {node.__class__} not supported")
 
-    def process_file(self, filepath: str, base_package_name: Optional[str] = None):
-        filepath = Path(filepath)
-        if not filepath.exists():
-            raise Exception(f"Filepath does not exist : {str(filepath)}")
+    def process_file(self, filepath: str):
+        path_filepath = Path(filepath)
+        if not path_filepath.exists():
+            raise Exception(f"Filepath does not exist : {filepath}")
 
-        if filepath.suffix == '.py':
-            file = filepath.open('r')
+        if path_filepath.suffix == '.py':
+            file = path_filepath.open('r')
             file_content = file.read()
             for node in ast.iter_child_nodes(ast.parse(file_content)):
-                self.process_node(node=node, current_module=str(filepath), current_filepath=str(filepath))
+                self.process_node(node=node, current_module=filepath, current_filepath=filepath)
         else:
-            module_key = base_package_name or filepath.stem
-            file_id = f"{module_key}{filepath.suffix}"
-            relative_filepath = get_package_relative_filepath(absolute_filepath=str(filepath), package_name=module_key)
-            self.files[file_id] = PackageItem(absolute_filepath=str(filepath), relative_filepath=relative_filepath)
+            self.add_python_file(filepath=filepath)
 
     def import_folder(self, folderpath: str, excluded_folders_names: Optional[List[str]] = None, excluded_files_extensions: Optional[List[str]] = None):
-        folderpath_path = Path(folderpath)
         for root_dirpath, dirs, filenames in os.walk(folderpath, topdown=True):
             # The topdown arg allow to modify the dirs list in the walk, and so we can easily exclude folders.
             dirs[:] = [dirpath for dirpath in dirs if Path(dirpath).name not in excluded_folders_names]
-            relative_root_dirpath = os.path.join(folderpath_path.stem, root_dirpath.replace(folderpath, "").strip("\\").strip("/"))
             for filename in filenames:
                 filename = Path(filename)
                 if filename.suffix not in excluded_files_extensions:
                     # todo: exclude .pyd files when building for windows and exclude .so files when building for windows
-                    module_key = relative_root_dirpath.replace("\\", ".") + f".{filename.stem}"
                     module_filepath = os.path.join(root_dirpath, str(filename))
-                    relative_filepath = get_package_relative_filepath(absolute_filepath=module_filepath, package_name=module_key)
-
-                    file_id = f"{module_key}{filename.suffix}"
-                    self.files[file_id] = PackageItem(absolute_filepath=module_filepath, relative_filepath=relative_filepath)
+                    self.add_python_file(filepath=module_filepath)
 
 def make_no_os_matching_file_warning_message(system_os: Resolver.TARGETS_OS_LITERAL, target_os: Resolver.TARGETS_OS_LITERAL, source_filepath: str) -> str:
     source_extension = Resolver.OS_TO_COMPILED_EXTENSIONS[system_os]
