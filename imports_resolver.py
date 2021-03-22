@@ -220,7 +220,7 @@ class Resolver:
             dirs[:] = [dirpath for dirpath in dirs if Path(dirpath).name not in excluded_folders_names]
             for filename in filenames:
                 filename = Path(filename)
-                if filename.suffix not in excluded_files_extensions:
+                if excluded_files_extensions is None or filename.suffix not in excluded_files_extensions:
                     # todo: exclude .pyd files when building for windows and exclude .so files when building for windows
                     module_filepath = os.path.join(root_dirpath, str(filename))
                     self.add_python_file(filepath=module_filepath)
