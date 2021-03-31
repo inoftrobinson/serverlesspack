@@ -1,17 +1,20 @@
 import os
 from dataclasses import dataclass
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, Tuple, Literal
 
+import click
 import yaml
-from pydantic import ValidationError, BaseModel
+from pydantic import ValidationError, BaseModel, Field
 
 
 class BaseFolderIncludeItem(BaseModel):
-    excluded_files_extensions: Optional[List[str]] = None
-    excluded_folders_names: Optional[List[str]] = None
+    excluded_files_extensions: List[str] = Field(default_factory=list)
+    excluded_folders_names: List[str] = Field(default_factory=list)
 
 class SourceConfig(BaseModel):
     root_file: str
+    type: Optional[Literal['code', 'layer']] = None
+    format: Optional[Literal['zip', 'folder']] = None
     class FolderIncludeItem(BaseFolderIncludeItem):
         additional_linux: Optional[BaseFolderIncludeItem] = None
         additional_windows: Optional[BaseFolderIncludeItem] = None
@@ -20,6 +23,8 @@ class SourceConfig(BaseModel):
 @dataclass
 class Config:
     root_filepath: str
+    type: Literal['code', 'layer']
+    format: Literal['zip', 'folder']
     folders_includes: Dict[str, BaseFolderIncludeItem]
 
 
@@ -45,8 +50,16 @@ class ConfigClient:
         if not os.path.isfile(rendered_absolute_root_filepath):
             raise Exception(f"No file found at {rendered_absolute_root_filepath}")
 
-        config = Config(root_filepath=rendered_absolute_root_filepath, folders_includes=dict())
+        if source_config.type is None:
+            source_config.type = click.prompt(text="Export type", type=click.Choice(['code', 'layer']))
+        if source_config.format is None:
+            source_config.format = click.prompt(text="Format type", type=click.Choice(['zip', 'folder']))
 
+        config = Config(
+            root_filepath=rendered_absolute_root_filepath,
+            type=source_config.type, format=source_config.format,
+            folders_includes=dict()
+        )
         if source_config.folders_includes is not None:
             for folderpath, folder_config in source_config.folders_includes.items():
                 output_config_folder_include_item = BaseFolderIncludeItem()

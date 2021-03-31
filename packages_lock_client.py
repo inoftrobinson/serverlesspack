@@ -8,14 +8,16 @@ import importlib.metadata
 import os
 import subprocess
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 from types import ModuleType
-from typing import List, TypedDict, Dict, Optional
+from typing import List, Dict, Optional
 import re
 import pkg_resources
 
 
-class RequirementModuleItem(TypedDict):
+@dataclass
+class RequirementModuleItem:
     module_name: str
     version: str
     version_selector: str
@@ -36,8 +38,8 @@ class PackagesLockClient:
                     return parents_parts[i + 1] if len(parents_parts) - 1 > i + 1 else None
         return None
 
-    def open_requirements(self):
-        with Path('F:/Inoft/anvers_1944_project/inoft_vocal_engine/requirements.txt').open() as requirements_txt:
+    def open_requirements(self, filepath: str):
+        with Path(filepath).open() as requirements_txt:
             crude_requirements: List[str] = [str(requirement) for requirement in pkg_resources.parse_requirements(requirements_txt)]
             print(crude_requirements)
             for requirement in crude_requirements:

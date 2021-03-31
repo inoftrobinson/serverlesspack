@@ -217,7 +217,9 @@ class Resolver:
     def import_folder(self, folderpath: str, excluded_folders_names: Optional[List[str]] = None, excluded_files_extensions: Optional[List[str]] = None):
         for root_dirpath, dirs, filenames in os.walk(folderpath, topdown=True):
             # The topdown arg allow to modify the dirs list in the walk, and so we can easily exclude folders.
-            dirs[:] = [dirpath for dirpath in dirs if Path(dirpath).name not in excluded_folders_names]
+            if excluded_folders_names is not None:
+                dirs[:] = [dirpath for dirpath in dirs if Path(dirpath).name not in excluded_folders_names]
+
             for filename in filenames:
                 filename = Path(filename)
                 if excluded_files_extensions is None or filename.suffix not in excluded_files_extensions:
