@@ -4,10 +4,25 @@ from typing import Set, List, Callable, Dict, Any
 import click
 from serverlesspack.configuration_client import ConfigClient
 from serverlesspack.imports_resolver import Resolver
-from serverlesspack.packager import package_files, package_lambda_layer, make_absolute_python_layer_packages_dirpath, \
-    install_packages_to_dir, make_base_python_layer_packages_dir, LocalFileItem, files_to_zip, files_to_folder, \
-    ContentFileItem, install_dependencies_and_get_files, resolve_already_installed_dependencies, \
-    recursive_get_files_in_layer_folder, resolve_install_and_get_dependencies_files
+from serverlesspack.packager import ContentFileItem, LocalFileItem, make_base_python_layer_packages_dir, package_files, \
+    files_to_zip, files_to_folder, resolve_install_and_get_dependencies_files
+
+
+package_files_handlers_by_format_switch: Dict[str, Callable[[str, str, List[LocalFileItem], List[ContentFileItem]], Any]] = {
+    'zip': files_to_zip, 'folder': files_to_folder
+}
+def safe_get_package_files_handler(format_type: str):
+    handler = package_files_handlers_by_format_switch.get(format_type, None)
+    if handler is None:
+        raise Exception(f"Format {format_type} not supported")
+    return handler
+
+
+def prompt_python_version() -> str:
+    return click.prompt(
+        text="For which Python version do you want to create the layer ?",
+        type=click.Choice(['3.5', '3.6', '3.7', '3.8', '3.9']), confirmation_prompt=True
+    )
 
 
 @click.command()
@@ -20,10 +35,7 @@ def package_cli(target_os: str, config_filepath: str, verbose: bool):
 def package_api(target_os: str, config_filepath: str, verbose: bool):
     config = ConfigClient(verbose=verbose).load_render_config_file(filepath=config_filepath, target_os=target_os)
 
-    package_files_handler = package_files_handlers_by_format_switch.get(config.format, None)
-    if package_files_handler is None:
-        raise Exception(f"Format {config.format} not supported")
-
+    package_files_handler = safe_get_package_files_handler(format_type=config.format)
     selected_python_version = prompt_python_version()
 
     resolver = Resolver(root_filepath=config.root_filepath, target_os=target_os, verbose=verbose)
@@ -39,49 +51,43 @@ def package_api(target_os: str, config_filepath: str, verbose: bool):
     if not os.path.exists(dist_dirpath):
         os.makedirs(dist_dirpath)
 
-    base_layer_dirpath = make_base_python_layer_packages_dir(python_version=selected_python_version)
-    local_file_items, content_file_items = package_files(
-        included_files_absolute_paths=resolver.included_files_absolute_paths, archive_prefix=base_layer_dirpath
-    )
-
     if config.type == 'layer':
-        # When packaging as a layer, we always the install the dependencies
-        # and we save them to the same package as the application files.
-        lambda_layer_dirpath = os.path.join(dist_dirpath, "lambda_layer")
+        # When packaging as a layer, we package the applications files with a base_layer_dirpath as the archive_prefix,
+        # and we always install/resolve the dependencies of the applications in the same package as the application files.
+        base_layer_dirpath = make_base_python_layer_packages_dir(python_version=selected_python_version)
+        local_file_items, content_file_items = package_files(
+            included_files_absolute_paths=resolver.included_files_absolute_paths, archive_prefix=base_layer_dirpath
+        )
+        lambda_layer_dirpath = os.path.join(dist_dirpath, 'lambda_layer')
         dependencies_local_file_items = resolve_install_and_get_dependencies_files(
             resolver=resolver, lambda_layer_dirpath=lambda_layer_dirpath, base_layer_dirpath=base_layer_dirpath
         )
-        package_files_handler(dist_dirpath, [*local_file_items, *dependencies_local_file_items], content_file_items)
+        package_files_handler(dist_dirpath, 'build', [*local_file_items, *dependencies_local_file_items], content_file_items)
+        # We package both the application files and the dependencies files under the
+        # build key (which will output either a build.zip file or a build folder)
 
     elif config.type == 'code':
-        package_files_handler(dist_dirpath, local_file_items, content_file_items)
-        if click.confirm("Package the dependencies as lambda layer ?"):
-            lambda_layer_dirpath = os.path.join(dist_dirpath, "lambda_layer")
+        # When packaging as code we package the application files without any archive_prefix, which we will then package.
+        # After that, was ask the user if he want to package his applications dependencies as a lambda layer.
+        base_layer_dirpath = make_base_python_layer_packages_dir(python_version=selected_python_version)
+        local_file_items, content_file_items = package_files(
+            included_files_absolute_paths=resolver.included_files_absolute_paths
+        )
+        package_files_handler(dist_dirpath, 'build', local_file_items, content_file_items)
+        # We first package the applications files under the build key
+
+        if click.confirm("Package your application dependencies as lambda layer ?"):
+            lambda_layer_dirpath = os.path.join(dist_dirpath, 'lambda_layer')
             dependencies_local_file_items = resolve_install_and_get_dependencies_files(
                 resolver=resolver, lambda_layer_dirpath=lambda_layer_dirpath, base_layer_dirpath=base_layer_dirpath
             )
-            files_to_folder(dist_dirpath, dependencies_local_file_items, [])
-            # package_layer_api(packages_names=resolver.included_dependencies_names, target_dirpath=lambda_layer_dirpath)
+            lambda_layer_format = click.prompt(text="Format", type=click.Choice(['zip', 'folder']))
+            lambda_layer_format_handler = safe_get_package_files_handler(format_type=lambda_layer_format)
+            lambda_layer_format_handler(dist_dirpath, 'lambda_layer', dependencies_local_file_items, [])
+            # Then, if the user asked to package his dependencies, we package them under the lambda_layer
+            # key (which will output either a lambda_layer.zip file or a lambda_layer folder)
     else:
         raise Exception(f"Config type of {config.type} not supported")
-
-def prompt_python_version() -> str:
-    return click.prompt(
-        text="For which Python version do you want to create the layer ?",
-        type=click.Choice(['3.5', '3.6', '3.7', '3.8', '3.9']), confirmation_prompt=True
-    )
-
-def package_layer_api(packages_names: Set[str] or List[str], target_dirpath: str):
-    selected_python_version = prompt_python_version()
-    package_lambda_layer(
-        packages_names=packages_names,
-        target_dirpath=target_dirpath,
-        python_version=selected_python_version
-    )
-
-package_files_handlers_by_format_switch: Dict[str, Callable[[str, List[LocalFileItem], List[ContentFileItem]], Any]] = {
-    'zip': files_to_zip, 'folder': files_to_folder
-}
 
 
 if __name__ == '__main__':

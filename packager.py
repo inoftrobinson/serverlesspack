@@ -144,16 +144,14 @@ def resolve_install_and_get_dependencies_files(resolver: Resolver, lambda_layer_
     return dependencies_local_file_items
 
 
-def files_to_zip(root_path: str, local_files_items: List[LocalFileItem], content_files_items: List[ContentFileItem]):
-    output_zip_filepath = os.path.join(root_path, f"build.zip")
+def files_to_zip(root_path: str, destination_file_key: str, local_files_items: List[LocalFileItem], content_files_items: List[ContentFileItem]):
+    output_zip_filepath = os.path.join(root_path, f'{destination_file_key}.zip')
     if os.path.isfile(output_zip_filepath):
         os.remove(output_zip_filepath)
-
-    container_filepath = os.path.join(root_path, 'build.zip')
     build_temp_folderpath = os.path.join(root_path, "build_temp")
 
     import zipfile
-    with zipfile.ZipFile(container_filepath, 'w', compression=zipfile.ZIP_DEFLATED) as zip_object:
+    with zipfile.ZipFile(output_zip_filepath, 'w', compression=zipfile.ZIP_DEFLATED) as zip_object:
         # The ZIP_DEFLATED method will actually compress the file (where as the ZIP_STORED will store the data as a zip object, but
         # will practically not compress the data), and the ZIP_DEFLATED as been tested and can be opened by AWS Lambda, where as
         # other rarer methods (for example, like ZIP_BZIP2) are not supported and the file could not be opened by AWS Lambda.
@@ -176,16 +174,19 @@ def files_to_zip(root_path: str, local_files_items: List[LocalFileItem], content
 
     click.secho(f"Packaged zipped file available at {os.path.abspath(output_zip_filepath)}", fg='green')
 
-def files_to_folder(root_path: str, local_files_items: List[LocalFileItem], content_files_items: List[ContentFileItem]):
+def files_to_folder(root_path: str, destination_dirname: str, local_files_items: List[LocalFileItem], content_files_items: List[ContentFileItem]):
+    destination_dirpath = os.path.join(root_path, destination_dirname)
+
     for local_file_item in tqdm(local_files_items, desc="Copying local files"):
-        absolute_target_filepath = os.path.join(root_path, local_file_item.relative_filepath)
-        if not os.path.exists(absolute_target_filepath):
-            os.makedirs(absolute_target_filepath)
+        absolute_target_filepath = os.path.join(destination_dirpath, local_file_item.relative_filepath)
+        absolute_target_parent_dirname = os.path.dirname(absolute_target_filepath)
+        if not os.path.exists(absolute_target_parent_dirname):
+            os.makedirs(absolute_target_parent_dirname)
         shutil.copy(src=local_file_item.absolute_filepath, dst=absolute_target_filepath)
 
     for content_file_item in tqdm(content_files_items, desc="Writing content files"):
-        absolute_target_filepath = os.path.join(root_path, content_file_item.relative_filepath)
+        absolute_target_filepath = os.path.join(destination_dirpath, content_file_item.relative_filepath)
         with open(absolute_target_filepath, "w+") as file:
             file.write(content_file_item.content)
 
-    click.secho(f"Folder available at {os.path.abspath(root_path)}", fg='green')
+    click.secho(f"Folder available at {os.path.abspath(destination_dirpath)}", fg='green')
