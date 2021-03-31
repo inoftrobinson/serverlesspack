@@ -1,7 +1,6 @@
 import os
 import shutil
 import subprocess
-import zipfile
 from pathlib import Path
 from typing import List, Dict, Set, Optional, Tuple
 import click
@@ -78,65 +77,19 @@ def package_files(included_files_absolute_paths: Set[str], archive_prefix: Optio
 
     return local_files_items, list(content_files_items.values())
 
-class ZipperFolderWriterClient:
-    def __init__(self, root_path: str, is_zip: bool = True):
-        self.root_path = root_path
-        self.is_zip = is_zip
-        self.build_temp_folderpath = os.path.join(self.root_path, "build_temp")
-        self.container_filepath = os.path.join(self.root_path, 'build.zip')
-        self.zip_object: Optional[zipfile.ZipFile] = None
-
-    def __enter__(self):
-        if self.is_zip is True:
-            self.zip_object = zipfile.ZipFile(self.container_filepath, 'w')
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        if self.zip_object is not None:
-            self.zip_object.close()
-
-    def write_local_file_item(self, local_file_item: LocalFileItem):
-        if self.zip_object is None:
-            absolute_target_filepath = os.path.join(self.root_path, local_file_item.relative_filepath)
-            if not os.path.exists(absolute_target_filepath):
-                os.makedirs(absolute_target_filepath)
-            shutil.copy(src=local_file_item.absolute_filepath, dst=absolute_target_filepath)
-        else:
-            self.zip_object.write(filename=local_file_item.absolute_filepath, arcname=local_file_item.relative_filepath)
-
-    def write_content_file_item(self, content_file_item: ContentFileItem):
-        if self.zip_object is None:
-            absolute_target_filepath = os.path.join(self.root_path, content_file_item.relative_filepath)
-            with open(absolute_target_filepath, "w+") as file:
-                file.write(content_file_item.content)
-        else:
-            temporary_content_container_filepath = os.path.join(self.build_temp_folderpath, content_file_item.relative_filepath)
-            if not os.path.isdir(os.path.dirname(temporary_content_container_filepath)):
-                os.makedirs(os.path.dirname(temporary_content_container_filepath))
-
-            with open(temporary_content_container_filepath, 'w+') as temp_file:
-                temp_file.write(content_file_item.content)
-
-            self.zip_object.write(filename=temporary_content_container_filepath, arcname=content_file_item.relative_filepath)
-            os.remove(temporary_content_container_filepath)
-            # We do not use 'writestr' function of the ZipFile library, instead we write the content of temp file to temporary
-            # file, which we then write to the archive, because using writestr will create file's that are in read only mode, which
-            # will not be usable by AWS Lambda. And I never figured out how to write file in read and write mode with writestr.
-
-
-def __files_to_zip(root_path: str, local_files_items: List[LocalFileItem], content_files_items: List[ContentFileItem]):
-    output_zip_filepath = os.path.join(root_path, f"build.zip")
-    if os.path.isfile(output_zip_filepath):
-        os.remove(output_zip_filepath)
-
-    if not os.path.isfile(output_zip_filepath):
-        import zipfile
-        with ZipperFolderWriterClient(root_path, is_zip=False) as zipper_client:
-            for local_file_item in tqdm(local_files_items, desc="Zipping local files"):
-                zipper_client.write_local_file_item(local_file_item)
-            for content_file_item in tqdm(content_files_items, desc="Zipping content files"):
-                zipper_client.write_content_file_item(content_file_item)
-        click.secho(f"Packaged zipped file available at {output_zip_filepath}", fg='green')
+def install_packages_and_get_files(packages_names: Set[str], target_dirpath: str, base_layer_dirpath: str) -> List[LocalFileItem]:
+    output_local_file_items: List[LocalFileItem] = list()
+    installation_result = install_packages_to_dir(packages_names=packages_names, target_dirpath=target_dirpath)
+    for root_dirpath, dirs, filenames in os.walk(target_dirpath):
+        for filename in filenames:
+            absolute_filepath = os.path.abspath(os.path.join(root_dirpath, filename))
+            relative_filepath = os.path.relpath(absolute_filepath, target_dirpath)
+            output_local_file_items.append(LocalFileItem(
+                archive_prefix=base_layer_dirpath,
+                relative_filepath=relative_filepath,
+                absolute_filepath=absolute_filepath
+            ))
+    return output_local_file_items
 
 
 def files_to_zip(root_path: str, local_files_items: List[LocalFileItem], content_files_items: List[ContentFileItem]):
@@ -148,7 +101,10 @@ def files_to_zip(root_path: str, local_files_items: List[LocalFileItem], content
     build_temp_folderpath = os.path.join(root_path, "build_temp")
 
     import zipfile
-    with zipfile.ZipFile(container_filepath, 'w') as zip_object:
+    with zipfile.ZipFile(container_filepath, 'w', compression=zipfile.ZIP_DEFLATED) as zip_object:
+        # The ZIP_DEFLATED method will actually compress the file (where as the ZIP_STORED will store the data as a zip object, but
+        # will practically not compress the data), and the ZIP_DEFLATED as been tested and can be opened by AWS Lambda, where as
+        # other rarer methods (for example, like ZIP_BZIP2) are not supported and the file could not be opened by AWS Lambda.
         for local_file_item in tqdm(local_files_items, desc="Zipping local files"):
             zip_object.write(filename=local_file_item.absolute_filepath, arcname=local_file_item.relative_filepath)
 
@@ -166,16 +122,18 @@ def files_to_zip(root_path: str, local_files_items: List[LocalFileItem], content
             # file, which we then write to the archive, because using writestr will create file's that are in read only mode, which
             # will not be usable by AWS Lambda. And I never figured out how to write file in read and write mode with writestr.
 
-    click.secho(f"Packaged zipped file available at {output_zip_filepath}", fg='green')
+    click.secho(f"Packaged zipped file available at {os.path.abspath(output_zip_filepath)}", fg='green')
 
 def files_to_folder(root_path: str, local_files_items: List[LocalFileItem], content_files_items: List[ContentFileItem]):
-    for local_file_item in tqdm(local_files_items, desc="Zipping local files"):
+    for local_file_item in tqdm(local_files_items, desc="Copying local files"):
         absolute_target_filepath = os.path.join(root_path, local_file_item.relative_filepath)
         if not os.path.exists(absolute_target_filepath):
             os.makedirs(absolute_target_filepath)
         shutil.copy(src=local_file_item.absolute_filepath, dst=absolute_target_filepath)
 
-    for content_file_item in tqdm(content_files_items, desc="Zipping content files"):
+    for content_file_item in tqdm(content_files_items, desc="Writing content files"):
         absolute_target_filepath = os.path.join(root_path, content_file_item.relative_filepath)
         with open(absolute_target_filepath, "w+") as file:
             file.write(content_file_item.content)
+
+    click.secho(f"Folder available at {os.path.abspath(root_path)}", fg='green')
