@@ -3,8 +3,13 @@ import shutil
 import subprocess
 from pathlib import Path
 from typing import List, Dict, Set, Optional, Tuple
+
+from asciitree import LeftAligned
+from pkg_resources import EggInfoDistribution
 import click
 from tqdm import tqdm
+
+from serverlesspack.imports_resolver import Resolver
 
 
 class BaseFileItem:
@@ -77,19 +82,66 @@ def package_files(included_files_absolute_paths: Set[str], archive_prefix: Optio
 
     return local_files_items, list(content_files_items.values())
 
-def install_packages_and_get_files(packages_names: Set[str], target_dirpath: str, base_layer_dirpath: str) -> List[LocalFileItem]:
+def recursive_get_files_in_layer_folder(source_dirpath: str, base_layer_dirpath: str) -> List[LocalFileItem]:
     output_local_file_items: List[LocalFileItem] = list()
-    installation_result = install_packages_to_dir(packages_names=packages_names, target_dirpath=target_dirpath)
-    for root_dirpath, dirs, filenames in os.walk(target_dirpath):
+    for root_dirpath, dirs, filenames in os.walk(source_dirpath):
         for filename in filenames:
             absolute_filepath = os.path.abspath(os.path.join(root_dirpath, filename))
-            relative_filepath = os.path.relpath(absolute_filepath, target_dirpath)
+            relative_filepath = os.path.relpath(absolute_filepath, source_dirpath)
             output_local_file_items.append(LocalFileItem(
                 archive_prefix=base_layer_dirpath,
                 relative_filepath=relative_filepath,
                 absolute_filepath=absolute_filepath
             ))
     return output_local_file_items
+
+def install_dependencies_and_get_files(dependencies_names: Set[str], target_dirpath: str, base_layer_dirpath: str) -> List[LocalFileItem]:
+    installation_result = install_packages_to_dir(packages_names=dependencies_names, target_dirpath=target_dirpath)
+    return recursive_get_files_in_layer_folder(source_dirpath=target_dirpath, base_layer_dirpath=base_layer_dirpath)
+
+def resolve_already_installed_dependencies(dependencies_distributions: Dict[str, Optional[EggInfoDistribution]], dirpath_to_search_into: str) -> Set[str]:
+    reused_dependencies_tree_data: Dict[str, dict] = dict()
+    missing_dependencies_names: Set[str] = set()
+
+    for dependency_name, dependency_distribution in dependencies_distributions.items():
+        if dependency_distribution is None:
+            missing_dependencies_names.add(dependency_name)
+        else:
+            current_dependency_not_fully_installed = False
+            current_dependency_found_modules_paths = set()
+            for module in dependency_distribution.modules:
+                expected_module_path = os.path.join(dirpath_to_search_into, module)
+                if not os.path.exists(expected_module_path):
+                    current_dependency_not_fully_installed = True
+                    break
+                else:
+                    current_dependency_found_modules_paths.add(expected_module_path)
+
+            if current_dependency_not_fully_installed is True:
+                missing_dependencies_names.add(dependency_name)
+            else:
+                reused_dependencies_tree_data[dependency_name] = {
+                    os.path.abspath(module_path): {} for module_path in current_dependency_found_modules_paths
+                }
+
+    if len(reused_dependencies_tree_data) > 0:
+        print(LeftAligned()({'Re-used packages': reused_dependencies_tree_data}))
+    return missing_dependencies_names
+
+def resolve_install_and_get_dependencies_files(resolver: Resolver, lambda_layer_dirpath: str, base_layer_dirpath: str) -> List[LocalFileItem]:
+    dependencies_names_requiring_installation = resolve_already_installed_dependencies(
+        dependencies_distributions=resolver.included_dependencies_distributions,
+        dirpath_to_search_into=lambda_layer_dirpath
+    )
+    if len(dependencies_names_requiring_installation) > 0:
+        dependencies_installation_result = install_packages_to_dir(
+            packages_names=resolver.included_dependencies_names,
+            target_dirpath=lambda_layer_dirpath,
+        )
+    dependencies_local_file_items = recursive_get_files_in_layer_folder(
+        source_dirpath=lambda_layer_dirpath, base_layer_dirpath=base_layer_dirpath
+    )
+    return dependencies_local_file_items
 
 
 def files_to_zip(root_path: str, local_files_items: List[LocalFileItem], content_files_items: List[ContentFileItem]):

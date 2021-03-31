@@ -6,7 +6,7 @@ import importlib
 import importlib.util
 from pathlib import Path
 from types import ModuleType
-from typing import List, Optional, Set, Any, Literal, Tuple
+from typing import List, Optional, Set, Any, Literal, Tuple, Dict
 
 import distlib.database
 from pkg_resources import EggInfoDistribution
@@ -53,7 +53,8 @@ class Resolver:
         from importlib_metadata import packages_distributions
         self.packages_distributions = packages_distributions()
         self.distribution_path = distlib.database.DistributionPath(include_egg=True)
-        self.included_packages_names: Set[str] = set()
+        self.included_dependencies_names: Set[str] = set()
+        self.included_dependencies_distributions: Dict[str, Optional[EggInfoDistribution]] = dict()
         self.included_files_absolute_paths: Set[str] = {self.root_filepath}
 
     def _verbose_print(self, message: str):
@@ -179,13 +180,14 @@ class Resolver:
                         real_package_name_container: Optional[List[str]] = self.packages_distributions.get(package_distribution_name, None)
                         if real_package_name_container is not None and len(real_package_name_container) > 0:
                             real_package_name = real_package_name_container[0]
-                            if real_package_name not in self.included_packages_names:
+                            if real_package_name not in self.included_dependencies_names:
                                 package_distribution: Optional[EggInfoDistribution] = self.distribution_path.get_distribution(real_package_name)
                                 if package_distribution is not None:
                                     package_requirements: Set[str] = getattr(package_distribution, 'run_requires', set())
                                     # todo: do something with the package_requirements ?
 
-                                self.included_packages_names.add(real_package_name)
+                                self.included_dependencies_names.add(real_package_name)
+                                self.included_dependencies_distributions[real_package_name] = package_distribution
                                 self.process_file(filepath=imported_package_module_filepath)
                     else:
                         # If the file is a standalone file not from a library

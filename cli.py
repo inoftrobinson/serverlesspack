@@ -6,7 +6,8 @@ from serverlesspack.configuration_client import ConfigClient
 from serverlesspack.imports_resolver import Resolver
 from serverlesspack.packager import package_files, package_lambda_layer, make_absolute_python_layer_packages_dirpath, \
     install_packages_to_dir, make_base_python_layer_packages_dir, LocalFileItem, files_to_zip, files_to_folder, \
-    ContentFileItem, install_packages_and_get_files
+    ContentFileItem, install_dependencies_and_get_files, resolve_already_installed_dependencies, \
+    recursive_get_files_in_layer_folder, resolve_install_and_get_dependencies_files
 
 
 @click.command()
@@ -44,25 +45,23 @@ def package_api(target_os: str, config_filepath: str, verbose: bool):
     )
 
     if config.type == 'layer':
+        # When packaging as a layer, we always the install the dependencies
+        # and we save them to the same package as the application files.
         lambda_layer_dirpath = os.path.join(dist_dirpath, "lambda_layer")
-        installed_packages_local_file_items = install_packages_and_get_files(
-            packages_names=resolver.included_packages_names,
-            target_dirpath=lambda_layer_dirpath,
-            base_layer_dirpath=base_layer_dirpath
+        dependencies_local_file_items = resolve_install_and_get_dependencies_files(
+            resolver=resolver, lambda_layer_dirpath=lambda_layer_dirpath, base_layer_dirpath=base_layer_dirpath
         )
-        package_files_handler(dist_dirpath, [*local_file_items, *installed_packages_local_file_items], content_file_items)
+        package_files_handler(dist_dirpath, [*local_file_items, *dependencies_local_file_items], content_file_items)
 
     elif config.type == 'code':
         package_files_handler(dist_dirpath, local_file_items, content_file_items)
         if click.confirm("Package the dependencies as lambda layer ?"):
             lambda_layer_dirpath = os.path.join(dist_dirpath, "lambda_layer")
-            installed_packages_local_file_items = install_packages_and_get_files(
-                packages_names=resolver.included_packages_names,
-                target_dirpath=lambda_layer_dirpath,
-                base_layer_dirpath=base_layer_dirpath
+            dependencies_local_file_items = resolve_install_and_get_dependencies_files(
+                resolver=resolver, lambda_layer_dirpath=lambda_layer_dirpath, base_layer_dirpath=base_layer_dirpath
             )
-            files_to_folder(dist_dirpath, installed_packages_local_file_items, [])
-            # package_layer_api(packages_names=resolver.included_packages_names, target_dirpath=lambda_layer_dirpath)
+            files_to_folder(dist_dirpath, dependencies_local_file_items, [])
+            # package_layer_api(packages_names=resolver.included_dependencies_names, target_dirpath=lambda_layer_dirpath)
     else:
         raise Exception(f"Config type of {config.type} not supported")
 
