@@ -43,6 +43,8 @@ def package_api(target_os: str, config_filepath: str, verbose: bool):
     for folderpath, folder_config in config.folders_includes.items():
         resolver.import_folder(
             folderpath=folderpath,
+            included_folders_names=folder_config.included_folders_names,
+            included_files_extensions=folder_config.included_files_extensions,
             excluded_folders_names=folder_config.excluded_folders_names,
             excluded_files_extensions=folder_config.excluded_files_extensions
         )

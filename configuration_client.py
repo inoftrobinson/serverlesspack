@@ -8,8 +8,10 @@ from pydantic import ValidationError, BaseModel, Field
 
 
 class BaseFolderIncludeItem(BaseModel):
-    excluded_files_extensions: List[str] = Field(default_factory=list)
-    excluded_folders_names: List[str] = Field(default_factory=list)
+    included_files_extensions: Optional[List[str]] = None
+    included_folders_names: Optional[List[str]] = None
+    excluded_files_extensions: Optional[List[str]] = Field(default_factory=list)
+    excluded_folders_names: Optional[List[str]] = Field(default_factory=list)
 
 class SourceConfig(BaseModel):
     root_file: str
@@ -18,7 +20,7 @@ class SourceConfig(BaseModel):
     class FolderIncludeItem(BaseFolderIncludeItem):
         additional_linux: Optional[BaseFolderIncludeItem] = None
         additional_windows: Optional[BaseFolderIncludeItem] = None
-    folders_includes: Optional[Dict[str, FolderIncludeItem]] = None
+    folders_includes: Optional[Dict[str, Optional[FolderIncludeItem]]] = None
 
 @dataclass
 class Config:
@@ -45,6 +47,10 @@ class ConfigClient:
                 raise Exception(f"Error in the config file : {e}")
 
     @staticmethod
+    def combine_nullable_list(one: Optional[list], two: Optional[list]) -> Optional[list]:
+        return [*one, *two] if one is not None and two is not None else one if one is not None else two if two is not None else None
+
+    @staticmethod
     def _render_config(source_config: SourceConfig, config_filepath: str, target_os: str) -> Config:
         rendered_absolute_root_filepath = os.path.abspath(os.path.join(os.path.dirname(config_filepath), source_config.root_file))
         if not os.path.isfile(rendered_absolute_root_filepath):
@@ -63,19 +69,32 @@ class ConfigClient:
         if source_config.folders_includes is not None:
             for folderpath, folder_config in source_config.folders_includes.items():
                 output_config_folder_include_item = BaseFolderIncludeItem()
-                def render_folder_include_item(os_additional_folder_settings: Optional[BaseFolderIncludeItem]):
-                    if os_additional_folder_settings is not None:
-                        output_config_folder_include_item.excluded_folders_names = [
-                            *folder_config.excluded_folders_names, *(os_additional_folder_settings.excluded_folders_names or [])
-                        ]
-                        output_config_folder_include_item.excluded_files_extensions = [
-                            *folder_config.excluded_files_extensions, *(os_additional_folder_settings.excluded_files_extensions or [])
-                        ]
 
-                if target_os == 'windows':
-                    render_folder_include_item(os_additional_folder_settings=folder_config.additional_windows)
-                elif target_os == 'linux':
-                    render_folder_include_item(os_additional_folder_settings=folder_config.additional_linux)
+                if folder_config is not None:
+                    def render_folder_include_item(os_additional_folder_settings: Optional[BaseFolderIncludeItem]):
+                        if os_additional_folder_settings is None:
+                            output_config_folder_include_item.included_folders_names = folder_config.included_folders_names
+                            output_config_folder_include_item.included_files_extensions = folder_config.included_files_extensions
+                            output_config_folder_include_item.excluded_folders_names = folder_config.excluded_folders_names
+                            output_config_folder_include_item.excluded_files_extensions = folder_config.excluded_files_extensions
+                        else:
+                            output_config_folder_include_item.included_folders_names = ConfigClient.combine_nullable_list(
+                                folder_config.included_folders_names, os_additional_folder_settings.included_folders_names
+                            )
+                            output_config_folder_include_item.included_files_extensions = ConfigClient.combine_nullable_list(
+                                folder_config.included_files_extensions, os_additional_folder_settings.included_files_extensions
+                            )
+                            output_config_folder_include_item.excluded_folders_names = ConfigClient.combine_nullable_list(
+                                folder_config.excluded_folders_names, os_additional_folder_settings.excluded_folders_names
+                            )
+                            output_config_folder_include_item.excluded_files_extensions = ConfigClient.combine_nullable_list(
+                                folder_config.excluded_files_extensions, os_additional_folder_settings.excluded_files_extensions
+                            )
+
+                    if target_os == 'windows':
+                        render_folder_include_item(os_additional_folder_settings=folder_config.additional_windows)
+                    elif target_os == 'linux':
+                        render_folder_include_item(os_additional_folder_settings=folder_config.additional_linux)
 
                 rendered_absolute_folder_path = os.path.abspath(os.path.join(os.path.dirname(config_filepath), folderpath))
                 if not os.path.exists(rendered_absolute_folder_path):

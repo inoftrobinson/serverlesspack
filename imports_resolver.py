@@ -216,15 +216,25 @@ class Resolver:
         else:
             self.add_python_file(filepath=filepath)
 
-    def import_folder(self, folderpath: str, excluded_folders_names: Optional[List[str]] = None, excluded_files_extensions: Optional[List[str]] = None):
+    def import_folder(
+            self, folderpath: str,
+            included_files_extensions: Optional[List[str]] = None, included_folders_names: Optional[List[str]] = None,
+            excluded_files_extensions: Optional[List[str]] = None, excluded_folders_names: Optional[List[str]] = None
+    ):
         for root_dirpath, dirs, filenames in os.walk(folderpath, topdown=True):
             # The topdown arg allow to modify the dirs list in the walk, and so we can easily exclude folders.
-            if excluded_folders_names is not None:
-                dirs[:] = [dirpath for dirpath in dirs if Path(dirpath).name not in excluded_folders_names]
+            if included_folders_names is not None or excluded_folders_names is not None:
+                dirs[:] = [
+                    dirpath for dirpath in dirs
+                    if excluded_folders_names is None or Path(dirpath).name not in excluded_folders_names
+                    and included_folders_names is None or Path(dirpath).name in included_folders_names
+                ]
 
             for filename in filenames:
                 filename = Path(filename)
-                if excluded_files_extensions is None or filename.suffix not in excluded_files_extensions:
+                can_be_included: bool = included_files_extensions is None or filename.suffix in included_files_extensions
+                should_be_excluded: bool = excluded_files_extensions is not None and filename.suffix in excluded_files_extensions
+                if can_be_included is True and should_be_excluded is False:
                     # todo: exclude .pyd files when building for windows and exclude .so files when building for windows
                     module_filepath = os.path.join(root_dirpath, str(filename))
                     self.add_python_file(filepath=module_filepath)
