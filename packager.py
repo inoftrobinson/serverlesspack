@@ -144,7 +144,7 @@ def resolve_install_and_get_dependencies_files(resolver: Resolver, lambda_layer_
     return dependencies_local_file_items
 
 
-def files_to_zip(root_path: str, destination_file_key: str, local_files_items: List[LocalFileItem], content_files_items: List[ContentFileItem]):
+def files_to_zip(root_path: str, destination_file_key: str, local_files_items: List[LocalFileItem], content_files_items: List[ContentFileItem]) -> str:
     output_zip_filepath = os.path.join(root_path, f'{destination_file_key}.zip')
     if os.path.isfile(output_zip_filepath):
         os.remove(output_zip_filepath)
@@ -173,8 +173,9 @@ def files_to_zip(root_path: str, destination_file_key: str, local_files_items: L
             # will not be usable by AWS Lambda. And I never figured out how to write file in read and write mode with writestr.
 
     click.secho(f"Packaged zipped file available at {os.path.abspath(output_zip_filepath)}", fg='green')
+    return output_zip_filepath
 
-def files_to_folder(root_path: str, destination_dirname: str, local_files_items: List[LocalFileItem], content_files_items: List[ContentFileItem]):
+def files_to_folder(root_path: str, destination_dirname: str, local_files_items: List[LocalFileItem], content_files_items: List[ContentFileItem]) -> str:
     destination_dirpath = os.path.join(root_path, destination_dirname)
 
     for local_file_item in tqdm(local_files_items, desc="Copying local files"):
@@ -190,3 +191,4 @@ def files_to_folder(root_path: str, destination_dirname: str, local_files_items:
             file.write(content_file_item.content)
 
     click.secho(f"Folder available at {os.path.abspath(destination_dirpath)}", fg='green')
+    return destination_dirpath
