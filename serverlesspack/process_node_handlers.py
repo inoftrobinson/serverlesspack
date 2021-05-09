@@ -14,11 +14,6 @@ def handle_import(resolver: Resolver, node: Any, current_module: str, current_fi
     for name_item in node.names:
         resolver.add_package_by_name(package_name=name_item.name, current_filepath=current_filepath)
 
-def handle_function_def(resolver: Resolver, node: Any, current_module: str, current_filepath: str):
-    for child_node in node.body:
-        child_node_single_name: Optional[str] = getattr(child_node, 'name', None)
-        resolver.process_node(node=child_node, current_module=child_node_single_name or current_module, current_filepath=current_filepath)
-
 def handle_expression_container(resolver: Resolver, node: Any, current_module: str, current_filepath: str):
     for child_node in node.body:
         child_node_name_value: Optional[str] = getattr(child_node, 'name', None)
@@ -35,7 +30,7 @@ def do_nothing(resolver: Resolver, node: Any, current_module: str, current_filep
 process_node_handlers_switch: Dict[Any, Callable[[Resolver, Any, str, str], None]] = {
     ast.ImportFrom: handle_import_from,
     ast.Import: handle_import,
-    ast.FunctionDef: handle_function_def,
+    ast.FunctionDef: handle_expression_container,
     ast.ClassDef: handle_expression_container,
     ast.Try: handle_expression_container,
     ast.If: handle_expression_container,
