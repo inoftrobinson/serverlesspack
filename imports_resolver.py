@@ -80,6 +80,7 @@ class Resolver:
     @staticmethod
     def _remove_junk_start_of_path(path: str) -> Tuple[str]:
         parts = Path(path).parts
+        # return parts
         if len(parts) > 0:
             if parts[0] in [".", ".."]:
                 parts = parts[1:]
@@ -149,7 +150,14 @@ class Resolver:
         if imported_package_module is not None:
             imported_package_module_filepath: Optional[str] = getattr(imported_package_module, '__file__', None)
             if imported_package_module_filepath is not None:
-                imported_package_module_filepath = os.path.abspath(os.path.join(*self._remove_junk_start_of_path(imported_package_module_filepath)))
+                # Depending on the location of the build file compared to the location of the module filepath, we might
+                # need or might not need to remove the junk start of the path. So, we first check if the module filepath
+                # exists, if that's the case, we will use that, otherwise we will try to remove the junk start of the path.
+                if not os.path.exists(imported_package_module_filepath):
+                    imported_package_module_filepath = os.path.abspath(os.path.join(*self._remove_junk_start_of_path(imported_package_module_filepath)))
+
+                # At this point, the file should exists, we do not add an additional
+                # check, because if it does not exist, we want to cause an exception.
                 if python_base_libs_folder_path not in imported_package_module_filepath:
                     path_imported_package_module_filepath = Path(imported_package_module_filepath)
 

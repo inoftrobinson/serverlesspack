@@ -1,3 +1,4 @@
+import ast
 import os
 import shutil
 import subprocess
@@ -9,7 +10,10 @@ from pkg_resources import EggInfoDistribution
 import click
 from tqdm import tqdm
 
+from serverlesspack.exceptions import OutputDirpathTooLow
 from serverlesspack.imports_resolver import Resolver
+from serverlesspack.packages_lock_client import PackagesLockClient
+from serverlesspack.utils import message_with_vars
 
 
 class BaseFileItem:
@@ -60,21 +64,66 @@ def package_lambda_layer(packages_names: Set[str] or List[str], target_dirpath: 
     return install_packages_to_dir(packages_names=packages_names, target_dirpath=python_layer_packages_dirpath)
 
 
-def package_files(included_files_absolute_paths: Set[str], archive_prefix: Optional[str] = None) -> Tuple[List[LocalFileItem], List[ContentFileItem]]:
+def process_file(absolute_filepath: str, common_prefix_across_all_files: str) -> Optional[str]:
+    """
+    :return: None if file did not required processing or its processing failed, processed content otherwise
+    """
+    path_absolute_filepath = Path(absolute_filepath)
+    if path_absolute_filepath.suffix == '.py':
+        with open(absolute_filepath, 'r') as file:
+            file_content = file.read()
+            from serverlesspack.mutators_node_handlers import mutators_node_handlers_switch
+            try:
+                file_content_lines: List[str] = file_content.splitlines()
+                processed_content_lines: List[str] = []
+
+                if "editor_blueprint.py" in absolute_filepath:
+                    print("e")
+
+                last_line_num: int = 0
+                for node in ast.iter_child_nodes(ast.parse(file_content)):
+                    if node.lineno > last_line_num + 1:
+                        lines_to_add: List[str] = file_content_lines[last_line_num:node.lineno-1]
+                        processed_content_lines.extend(lines_to_add)
+                        # last_line_num =
+                    last_line_num: int = node.end_lineno
+
+                    handler = mutators_node_handlers_switch.get(node.__class__, None)
+                    modified_content: Optional[str] = handler(common_prefix_across_all_files, node, absolute_filepath)
+                    if modified_content is None:
+                        processed_content_lines.extend(file_content_lines[node.lineno-1:node.end_lineno-1])
+                    else:
+                        processed_content_lines.append(modified_content)
+                output_file_content = "\n".join(processed_content_lines)
+                return output_file_content
+            except SyntaxError as e:
+                print(message_with_vars(
+                    message="Python file contained a syntax error. The file has been packaged but not fully processed.",
+                    vars_dict={'filepath': absolute_filepath, 'exception': e}
+                ))
+    return None
+
+def package_files(included_files_absolute_paths: Set[str], output_base_dirpath: str, archive_prefix: Optional[str] = None) -> Tuple[List[LocalFileItem], List[ContentFileItem]]:
     local_files_items: List[LocalFileItem] = list()
     content_files_items: Dict[str, ContentFileItem] = dict()
+
     common_prefix_across_all_files = os.path.commonprefix([absolute_filepath for absolute_filepath in included_files_absolute_paths])
+    if len(Path(output_base_dirpath).parts) > len(Path(common_prefix_across_all_files).parts):
+        raise OutputDirpathTooLow(highest_found_directory=common_prefix_across_all_files, output_base_dirpath=output_base_dirpath)
+
     factory = FileItemsFactory(archive_prefix=archive_prefix)
 
     for absolute_filepath in tqdm(included_files_absolute_paths, desc="Preparing files and creating missing __init__ files..."):
-        relative_filepath = os.path.relpath(absolute_filepath, common_prefix_across_all_files)
-        local_files_items.append(factory.make_local_file_item(absolute_filepath=absolute_filepath, relative_filepath=relative_filepath))
+        relative_filepath = os.path.relpath(absolute_filepath, output_base_dirpath)
+        local_files_items.append(factory.make_local_file_item(
+            relative_filepath=relative_filepath, absolute_filepath=absolute_filepath
+        ))
 
         folder_parts = Path(os.path.dirname(relative_filepath)).parts
         for i_part in range(len(folder_parts)):
             current_folder_part_relative_path = os.path.join(*folder_parts[0:i_part + 1])
             expected_init_file_relative_filepath = os.path.join(current_folder_part_relative_path, "__init__.py")
-            expected_init_file_absolute_filepath = os.path.join(common_prefix_across_all_files, expected_init_file_relative_filepath)
+            expected_init_file_absolute_filepath = os.path.join(output_base_dirpath, expected_init_file_relative_filepath)
             if expected_init_file_absolute_filepath not in included_files_absolute_paths and expected_init_file_absolute_filepath not in content_files_items:
                 content_files_items[expected_init_file_relative_filepath] = factory.make_content_file_item(
                     content="", relative_filepath=expected_init_file_relative_filepath
@@ -129,6 +178,10 @@ def resolve_already_installed_dependencies(dependencies_distributions: Dict[str,
     return missing_dependencies_names
 
 def resolve_install_and_get_dependencies_files(resolver: Resolver, lambda_layer_dirpath: str, base_layer_dirpath: str) -> List[LocalFileItem]:
+    # requirements = PackagesLockClient().open_requirements("./requirements.txt")
+    # todo: add support for requirements.txt instead of fully relying on dependencies
+    #  detection ? Or display insights into which requirements is not used
+
     dependencies_names_requiring_installation = resolve_already_installed_dependencies(
         dependencies_distributions=resolver.included_dependencies_distributions,
         dirpath_to_search_into=lambda_layer_dirpath

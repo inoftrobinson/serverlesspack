@@ -1,5 +1,6 @@
 import os
 from dataclasses import dataclass
+from pathlib import Path
 from typing import List, Callable, Dict, Optional
 
 import click
@@ -28,7 +29,7 @@ def safe_get_package_files_handler(format_type: str):
 def prompt_python_version() -> str:
     return click.prompt(
         text="For which Python version do you want to create the layer ?",
-        type=click.Choice(['3.5', '3.6', '3.7', '3.8', '3.9']), confirmation_prompt=True
+        type=click.Choice(['3.5', '3.6', '3.7', '3.8', '3.9']),
     )
 
 
@@ -56,6 +57,11 @@ def package_api(target_os: str, config_filepath: str, verbose: bool) -> PackageA
             excluded_files_extensions=folder_config.excluded_files_extensions
         )
 
+    output_base_dirpath: str = (
+        Path(os.path.realpath(config.project_root_dir)).parent
+        if config.project_root_dir is not None else os.path.dirname(config_filepath)
+    )
+
     dist_dirpath = os.path.join(os.path.dirname(config_filepath), "dist")
     if not os.path.exists(dist_dirpath):
         os.makedirs(dist_dirpath)
@@ -65,7 +71,8 @@ def package_api(target_os: str, config_filepath: str, verbose: bool) -> PackageA
         # and we always install/resolve the dependencies of the applications in the same package as the application files.
         base_layer_dirpath = make_base_python_layer_packages_dir(python_version=selected_python_version)
         local_file_items, content_file_items = package_files(
-            included_files_absolute_paths=resolver.included_files_absolute_paths, archive_prefix=base_layer_dirpath
+            included_files_absolute_paths=resolver.included_files_absolute_paths,
+            archive_prefix=base_layer_dirpath, output_base_dirpath=output_base_dirpath
         )
         lambda_layer_dirpath = os.path.join(dist_dirpath, 'lambda_layer')
         dependencies_local_file_items = resolve_install_and_get_dependencies_files(
@@ -83,7 +90,8 @@ def package_api(target_os: str, config_filepath: str, verbose: bool) -> PackageA
         # After that, was ask the user if he want to package his applications dependencies as a lambda layer.
         base_layer_dirpath = make_base_python_layer_packages_dir(python_version=selected_python_version)
         local_file_items, content_file_items = package_files(
-            included_files_absolute_paths=resolver.included_files_absolute_paths
+            included_files_absolute_paths=resolver.included_files_absolute_paths,
+            output_base_dirpath=output_base_dirpath
         )
         code_output_path = package_files_handler(dist_dirpath, 'build', local_file_items, content_file_items)
         # We first package the applications files under the build key

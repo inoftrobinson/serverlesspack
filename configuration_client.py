@@ -15,6 +15,7 @@ class BaseFolderIncludeItem(BaseModel):
 
 class SourceConfig(BaseModel):
     root_file: str
+    project_root_dir: Optional[str] = None
     type: Optional[Literal['code', 'layer']] = None
     format: Optional[Literal['zip', 'folder']] = None
     class FolderIncludeItem(BaseFolderIncludeItem):
@@ -25,6 +26,7 @@ class SourceConfig(BaseModel):
 @dataclass
 class Config:
     root_filepath: str
+    project_root_dir: Optional[str]
     type: Literal['code', 'layer']
     format: Literal['zip', 'folder']
     folders_includes: Dict[str, BaseFolderIncludeItem]
@@ -63,6 +65,7 @@ class ConfigClient:
 
         config = Config(
             root_filepath=rendered_absolute_root_filepath,
+            project_root_dir=source_config.project_root_dir,
             type=source_config.type, format=source_config.format,
             folders_includes=dict()
         )

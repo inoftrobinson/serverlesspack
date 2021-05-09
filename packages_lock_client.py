@@ -38,7 +38,7 @@ class PackagesLockClient:
                     return parents_parts[i + 1] if len(parents_parts) - 1 > i + 1 else None
         return None
 
-    def open_requirements(self, filepath: str):
+    def open_requirements(self, filepath: str) -> Dict[str, RequirementModuleItem]:
         with Path(filepath).open() as requirements_txt:
             crude_requirements: List[str] = [str(requirement) for requirement in pkg_resources.parse_requirements(requirements_txt)]
             print(crude_requirements)
@@ -53,6 +53,7 @@ class PackagesLockClient:
                         module_name=module_name, version=package_version, version_selector=version_selector
                     )
         print(self.requirements_modules)
+        return self.requirements_modules
 
     def _import_module(self, module_name: str) -> Optional[ModuleType]:
         try:
