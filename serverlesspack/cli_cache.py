@@ -1,6 +1,6 @@
 import os
 import json
-from serverlesspack.utils import get_serverless_pack_root_folder
+from .utils import get_serverless_pack_root_folder
 
 
 class CliCache:

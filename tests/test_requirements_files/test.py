@@ -2,7 +2,7 @@ import os
 import sys
 import unittest
 
-from serverlesspack.cli import package_api
+from serverlesspack.serverlesspack.cli import package_api
 
 
 class TestRequirementsFiles(unittest.TestCase):

@@ -4,9 +4,9 @@ from pathlib import Path
 from typing import List, Callable, Dict, Optional
 
 import click
-from serverlesspack.configuration_client import ConfigClient
-from serverlesspack.imports_resolver import Resolver
-from serverlesspack.packager import ContentFileItem, LocalFileItem, make_base_python_layer_packages_dir, package_files, \
+from .configuration_client import ConfigClient
+from .imports_resolver import Resolver
+from .packager import ContentFileItem, LocalFileItem, make_base_python_layer_packages_dir, package_files, \
     files_to_zip, files_to_folder, resolve_install_and_get_dependencies_files
 
 

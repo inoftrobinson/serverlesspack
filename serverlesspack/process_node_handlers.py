@@ -1,7 +1,7 @@
 import ast
 from typing import Any, Optional, Dict, Callable
 
-from serverlesspack.imports_resolver import Resolver
+from .imports_resolver import Resolver
 
 
 def handle_import_from(resolver: Resolver, node: Any, current_module: str, current_filepath: str):

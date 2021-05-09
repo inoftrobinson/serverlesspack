@@ -2,8 +2,8 @@ import ast
 from pathlib import Path
 from typing import List, Optional, Any
 
-from serverlesspack.mutators_node_handlers import mutators_node_handlers_switch
-from serverlesspack.utils import message_with_vars
+from .mutators_node_handlers import mutators_node_handlers_switch
+from .utils import message_with_vars
 
 
 class FileMutator:

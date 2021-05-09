@@ -1,4 +1,4 @@
-from serverlesspack.utils import message_with_vars
+from .utils import message_with_vars
 
 
 class OutputDirpathTooLow(Exception):

@@ -10,10 +10,10 @@ from pkg_resources import EggInfoDistribution
 import click
 from tqdm import tqdm
 
-from serverlesspack.exceptions import OutputDirpathTooLow
-from serverlesspack.imports_resolver import Resolver
-from serverlesspack.packages_lock_client import PackagesLockClient
-from serverlesspack.utils import message_with_vars
+from .exceptions import OutputDirpathTooLow
+from .imports_resolver import Resolver
+from .packages_lock_client import PackagesLockClient
+from .utils import message_with_vars
 
 
 class BaseFileItem:
@@ -72,7 +72,7 @@ def process_file(absolute_filepath: str, common_prefix_across_all_files: str) ->
     if path_absolute_filepath.suffix == '.py':
         with open(absolute_filepath, 'r') as file:
             file_content = file.read()
-            from serverlesspack.mutators_node_handlers import mutators_node_handlers_switch
+            from .mutators_node_handlers import mutators_node_handlers_switch
             try:
                 file_content_lines: List[str] = file_content.splitlines()
                 processed_content_lines: List[str] = []

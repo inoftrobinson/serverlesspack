@@ -10,7 +10,7 @@ from typing import List, Optional, Set, Any, Literal, Tuple, Dict
 
 import distlib.database
 from pkg_resources import EggInfoDistribution
-from serverlesspack.utils import get_serverless_pack_root_folder, message_with_vars
+from .utils import get_serverless_pack_root_folder, message_with_vars
 
 
 serverless_pack_root_folder = get_serverless_pack_root_folder()
@@ -204,7 +204,7 @@ class Resolver:
                             self.process_file(filepath=imported_package_module_filepath)
 
     def process_node(self, node: Any, current_module: str, current_filepath: str):
-        from serverlesspack.process_node_handlers import process_node_handlers_switch
+        from .process_node_handlers import process_node_handlers_switch
         handler = process_node_handlers_switch.get(node.__class__, None)
         if handler is not None:
             handler(self, node, current_module, current_filepath)
