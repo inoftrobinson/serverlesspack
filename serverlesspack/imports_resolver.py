@@ -26,6 +26,15 @@ def get_distribution_name_of_package(package_filepath: str) -> Optional[str]:
                 return parents_parts[i+1] if len(parents_parts)-1 > i+1 else None
     return None
 
+def get_package_relative_filepath(absolute_filepath: str, package_name: str) -> Optional[str]:
+    package_name_splits = package_name.split(".", 1)
+    if len(package_name_splits) > 0:
+        filepath_parts = Path(absolute_filepath).parts
+        for i, part in enumerate(filepath_parts):
+            if part == package_name_splits[0]:
+                return os.path.join(*filepath_parts[i:])
+    return None
+
 
 class Resolver:
     WINDOWS_KEY = 'windows'
@@ -38,12 +47,12 @@ class Resolver:
         self.root_filepath = root_filepath
         self.verbose = verbose
 
-        self.system_os = platform.system().lower()
+        self._system_os = platform.system().lower()
         if target_os is not None:
-            self.target_os = target_os
+            self._target_os = target_os
         else:
             print(f"WARNING - Defaulting building to active OS {self.system_os}. Your package might not work on other OS")
-            self.target_os = self.system_os
+            self._target_os = self.system_os
 
         if self.target_os in Resolver.TARGETS_OS:
             print(f"Building for {self.target_os} usage")
@@ -56,6 +65,14 @@ class Resolver:
         self.included_dependencies_names: Set[str] = set()
         self.included_dependencies_distributions: Dict[str, Optional[EggInfoDistribution]] = dict()
         self.included_files_absolute_paths: Set[str] = {self.root_filepath}
+
+    @property
+    def system_os(self) -> str:
+        return self._system_os
+
+    @property
+    def target_os(self) -> TARGETS_OS_LITERAL:
+        return self._target_os
 
     def _verbose_print(self, message: str):
         if self.verbose is True:
@@ -80,7 +97,6 @@ class Resolver:
     @staticmethod
     def _remove_junk_start_of_path(path: str) -> Tuple[str]:
         parts = Path(path).parts
-        # return parts
         if len(parts) > 0:
             if parts[0] in [".", ".."]:
                 parts = parts[1:]
@@ -116,16 +132,23 @@ class Resolver:
             # module name. This will work when trying to import libraries.
             return importlib.import_module(module_name)
         except ModuleNotFoundError as e:
+            self._verbose_print(message=str(e))
             # If this failed, we try to import the module as a file not inside a library. We do so by creating a relative
             # module path to the module from the current file, and we try to import the module from its relative path.
 
+            # filepath_relative_to_current_module = os.path.relpath(filepath, os.path.abspath(os.path.dirname(__file__)))
             filepath_relative_to_current_module = os.path.relpath(filepath, sys.argv[0])
             # We need a filepath relative to the current module, in order to try to import the file module. All the imports done in a file must be relative
             # to the file trying to import the module. This relative filepath is not destined to be used in the archive paths when packaging the code.
-            module_path = self._path_to_module_path(base_path=filepath_relative_to_current_module, module_name=module_name)
 
+            module_path = self._path_to_module_path(base_path=filepath_relative_to_current_module, module_name=module_name)
+            # module_path, module_package = self._path_to_module_path(base_path=str(filepath_relative_to_current_module), module_name=module_name)
             try:
-                module_spec = importlib.util.spec_from_file_location(module_path, filepath_relative_to_current_module)
+                """if module_path is not None and module_package is not None:
+                    return importlib.import_module(name=module_path, package=module_package)"""
+
+                # todo: this system is broken
+                module_spec = importlib.util.spec_from_file_location(module_name, filepath)  # filepath_relative_to_current_module)
                 return importlib.util.module_from_spec(module_spec) if module_spec is not None else None
             except ModuleNotFoundError as e:
                 # If both the import as a library and as a file unfortunately
@@ -148,13 +171,18 @@ class Resolver:
     def add_package_by_name(self, package_name: str, current_filepath: str):
         imported_package_module = self._import_module(module_name=package_name, filepath=current_filepath)
         if imported_package_module is not None:
+            d = imported_package_module.__dict__
             imported_package_module_filepath: Optional[str] = getattr(imported_package_module, '__file__', None)
+            import inspect
+            # rar = os.path.abspath(inspect.getsourcefile(imported_package_module))
             if imported_package_module_filepath is not None:
                 # Depending on the location of the build file compared to the location of the module filepath, we might
                 # need or might not need to remove the junk start of the path. So, we first check if the module filepath
                 # exists, if that's the case, we will use that, otherwise we will try to remove the junk start of the path.
                 if not os.path.exists(imported_package_module_filepath):
-                    imported_package_module_filepath = os.path.abspath(os.path.join(*self._remove_junk_start_of_path(imported_package_module_filepath)))
+                    pass
+                    # imported_package_module_filepath = os.path.join(*self._remove_junk_start_of_path(imported_package_module_filepath))
+                imported_package_module_filepath = os.path.abspath(imported_package_module_filepath)
 
                 # At this point, the file should exists, we do not add an additional
                 # check, because if it does not exist, we want to cause an exception.
@@ -168,7 +196,7 @@ class Resolver:
                             if not path_imported_package_module_filepath.is_file():
                                 self._verbose_print(make_no_os_matching_file_warning_message(
                                     system_os=self.system_os, target_os=self.target_os,
-                                    source_filepath=path_imported_package_module_filepath
+                                    source_filepath=str(path_imported_package_module_filepath)
                                 ))
                                 return
                     elif self.system_os == 'linux' and path_imported_package_module_filepath == '.so':
@@ -178,7 +206,7 @@ class Resolver:
                             if not path_imported_package_module_filepath.is_file():
                                 self._verbose_print(make_no_os_matching_file_warning_message(
                                     system_os=self.system_os, target_os=self.target_os,
-                                    source_filepath=path_imported_package_module_filepath
+                                    source_filepath=str(path_imported_package_module_filepath)
                                 ))
                                 return
 
@@ -247,7 +275,7 @@ class Resolver:
                     module_filepath = os.path.join(root_dirpath, str(filename))
                     self.add_python_file(filepath=module_filepath)
 
-def make_no_os_matching_file_warning_message(system_os: Resolver.TARGETS_OS_LITERAL, target_os: Resolver.TARGETS_OS_LITERAL, source_filepath: str) -> str:
+def make_no_os_matching_file_warning_message(system_os: str, target_os: Resolver.TARGETS_OS_LITERAL, source_filepath: str) -> str:
     source_extension = Resolver.OS_TO_COMPILED_EXTENSIONS[system_os]
     target_extension = Resolver.OS_TO_COMPILED_EXTENSIONS[target_os]
     return (
