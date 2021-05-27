@@ -17,16 +17,16 @@ export interface NetworkDirectedGraphState {
 
 
 export default class BarChart extends React.Component<NetworkDirectedGraphProps, NetworkDirectedGraphState> {
-    private readonly links: ClientLinkItem[];
-    private readonly nodes: { [key: string]: ClientNodeItem };
-    private readonly nodesValues: ClientNodeItem[];
+    private links: ClientLinkItem[];
+    private nodes: { [key: string]: ClientNodeItem };
+    private nodesValues: ClientNodeItem[];
     private readonly nodeRadius: number;
     private readonly forcePadding: number;
     private readonly targetDistanceUnitLength: number;
 
+    private simulation: d3.Simulation<d3.SimulationNodeDatum, undefined>;
     private linkPath: d3.Selection<SVGPathElement, ClientLinkItem, SVGGElement, unknown>;
     private linkLabel: d3.Selection<SVGTextElement, ClientLinkItem, SVGGElement, unknown>;
-    private simulation: d3.Simulation<d3.SimulationNodeDatum, undefined>;
     private nodeCircle: d3.Selection<SVGCircleElement, any, SVGGElement, unknown>;
     private nodeLabel: d3.Selection<SVGTextElement, any, SVGGElement, unknown>;
     private svg: d3.Selection<SVGSVGElement, unknown, HTMLElement, any>;
@@ -44,80 +44,19 @@ export default class BarChart extends React.Component<NetworkDirectedGraphProps,
 
         const chartContainer = d3.select(`#${this.props.id}`);
 
-        const svg = chartContainer
+        this.svg = chartContainer
             .append("svg")
             .attr("width", this.props.width)
             .attr("height", this.props.height);
-        this.svg = svg;
+
+        const dataDependantElements = this.createDataDependantElements();
+        this.linkPath = dataDependantElements.linkPath;
+        this.linkLabel = dataDependantElements.linkLabel;
+        this.nodeCircle = dataDependantElements.nodeCircle;
+        this.nodeLabel = dataDependantElements.nodeLabel;
 
         this.ticked = this.ticked.bind(this);
         this.transform = this.transform.bind(this);
-
-        // Per-type markers, as they don't inherit styles.
-        svg
-            .append("defs")
-            .selectAll("marker")
-            .data(["request-rejected", "request-accepted", "response"])
-            .enter()
-            .append("marker")
-            .attr("id", d => d)
-            .attr("markerWidth", 8)
-            .attr("markerHeight", 8)
-            .attr("refX", this.nodeRadius + 8)
-            .attr("refY", 4)
-            .attr("orient", "auto")
-            .attr("markerUnits", "userSpaceOnUse")
-            .append("path")
-            .attr("d", "M0,0 L0,8 L8,4 z");
-
-        this.linkPath = svg
-            .append("g")
-            .selectAll("path")
-            .data(this.links)
-            .enter()
-            .append("path")
-            .attr("id", (d, i) => `link-${i}`)
-            .attr("class", d => `link ${d.type}`)
-            .attr("marker-end", d => `url(#${d.type})`);
-
-        this.linkLabel = svg
-            .append("g")
-            .selectAll("text")
-            .data(this.links)
-            .enter()
-            .append("text")
-            .attr("class", "link-label")
-            .attr("text-anchor", "middle")
-            .attr("dy", "0.31em");
-        this.linkLabel
-            .append("textPath")
-            .attr("href", (d, i) => `#link-${i}`)
-            .attr("startOffset", "50%")
-            .text((d: ClientLinkItem) => d.type);
-
-        this.nodeCircle = svg
-            .append("g")
-            .selectAll("circle")
-            .data(this.nodesValues)
-            .enter()
-            .append("circle")
-            .attr("r", this.nodeRadius)
-            .call(d3.drag()
-                .on("start", this.dragstarted.bind(this))
-                .on("drag", this.dragged.bind(this))
-                .on("end", this.dragended.bind(this))
-            );
-
-        this.nodeLabel = svg
-            .append("g")
-            .selectAll("text")
-            .data(this.nodesValues)
-            .enter()
-            .append("text")
-            .attr("class", "node-label")
-            .attr("y", ".31em")
-            .attr("text-anchor", "middle")
-            .text((d: ClientNodeItem) => d.name);
 
     }
 
@@ -150,6 +89,96 @@ export default class BarChart extends React.Component<NetworkDirectedGraphProps,
         return [links, nodes];
     }
 
+    private createDataDependantElements() {
+        // Per-type markers, as they don't inherit styles.
+        this.svg
+            .append("defs")
+            .selectAll("marker")
+            .data(["request-rejected", "request-accepted", "response"])
+            .enter()
+            .append("marker")
+            .attr("id", d => d)
+            .attr("markerWidth", 8)
+            .attr("markerHeight", 8)
+            .attr("refX", this.nodeRadius + 8)
+            .attr("refY", 4)
+            .attr("orient", "auto")
+            .attr("markerUnits", "userSpaceOnUse")
+            .append("path")
+            .attr("d", "M0,0 L0,8 L8,4 z");
+
+        const linkPath = this.svg
+            .append("g")
+            .selectAll("path")
+            .data(this.links)
+            .enter()
+            .append("path")
+            .attr("id", (d, i) => `link-${i}`)
+            .attr("class", d => `link ${d.type}`)
+            .attr("marker-end", d => `url(#${d.type})`);
+
+        const linkLabel = this.svg
+            .append("g")
+            .selectAll("text")
+            .data(this.links)
+            .enter()
+            .append("text")
+            .attr("class", "link-label")
+            .attr("text-anchor", "middle")
+            .attr("dy", "0.31em");
+        linkLabel
+            .append("textPath")
+            .attr("href", (d, i) => `#link-${i}`)
+            .attr("startOffset", "50%")
+            .text((d: ClientLinkItem) => d.type);
+
+        const nodeCircle = this.svg
+            .append("g")
+            .selectAll("circle")
+            .data(this.nodesValues)
+            .enter()
+            .append("circle")
+            .attr("r", this.nodeRadius)
+            .call(d3.drag()
+                .on("start", this.dragstarted.bind(this))
+                .on("drag", this.dragged.bind(this))
+                .on("end", this.dragended.bind(this))
+            );
+
+        const nodeLabel = this.svg
+            .append("g")
+            .selectAll("text")
+            .data(this.nodesValues)
+            .enter()
+            .append("text")
+            .attr("class", "node-label")
+            .attr("y", ".31em")
+            .attr("text-anchor", "middle")
+            .text((d: ClientNodeItem) => d.name);
+
+        return {linkPath, linkLabel, nodeCircle, nodeLabel};
+    }
+
+    private createSimulation() {
+        return d3
+            .forceSimulation()
+            .force("link", d3
+                .forceLink()
+                .id((d) => d.name)
+                .distance(200)
+                .links(this.links)
+            )
+            .force("collide", d3
+                .forceCollide()
+                .radius(this.nodeRadius + 0.5)
+                .iterations(4)
+            )
+            .force("charge", d3.forceManyBody().strength(-200))
+            .force("center", d3.forceCenter(this.props.width / 2, this.props.height / 2))
+            .on("tick", this.ticked.bind(this))
+            .nodes(this.nodesValues);
+    }
+
     private resize() {
         this.simulation?.stop();
         this.simulation = this.createSimulation();
@@ -161,6 +190,23 @@ export default class BarChart extends React.Component<NetworkDirectedGraphProps,
     componentDidUpdate(prevProps: Readonly<NetworkDirectedGraphProps>, prevState: Readonly<NetworkDirectedGraphState>, snapshot?: any): void {
         if (this.props.width !== prevProps.width || this.props.height !== prevProps.height) {
             this.resize();
+        }
+        if (this.props.data !== prevProps.data) {
+            console.log("data changed");
+            this.linkPath.remove();
+            this.linkLabel.remove();
+            this.nodeCircle.remove();
+            this.nodeLabel.remove();
+
+            [this.links, this.nodes] = this.linksNodes();
+            this.nodesValues = _.map(this.nodes);
+
+            const dataDependantElements = this.createDataDependantElements();
+            this.linkPath = dataDependantElements.linkPath;
+            this.linkLabel = dataDependantElements.linkLabel;
+            this.nodeCircle = dataDependantElements.nodeCircle;
+            this.nodeLabel = dataDependantElements.nodeLabel;
+            this.createSimulation();
         }
     }
 
@@ -185,26 +231,6 @@ export default class BarChart extends React.Component<NetworkDirectedGraphProps,
             return [x2_x0, y2_y0];
         })();
         return {dx: x2_x0, dy: y2_y0};
-    }
-
-    private createSimulation() {
-        return d3
-            .forceSimulation()
-            .force("link", d3
-                .forceLink()
-                .id((d) => d.name)
-                .distance(200)
-                .links(this.links)
-            )
-            .force("collide", d3
-                .forceCollide()
-                .radius(this.nodeRadius + 0.5)
-                .iterations(4)
-            )
-            .force("charge", d3.forceManyBody().strength(-200))
-            .force("center", d3.forceCenter(this.props.width / 2, this.props.height / 2))
-            .on("tick", this.ticked.bind(this))
-            .nodes(this.nodesValues);
     }
 
     // Use elliptical arc path segments to doubly-encode directionality.
