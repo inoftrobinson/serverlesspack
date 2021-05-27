@@ -1,10 +1,11 @@
 import * as React from 'react';
 import * as ReactDOM from 'react-dom';
 import * as d3 from "d3";
+import './style.scss';
+import './dark_theme.scss';
 
 import Dropzone from 'react-dropzone';
-import BarChart from "./NetworkDirectedGraphComponent";
-import {filesArrayToFilesMap} from "../../../inoft_vocal_engine/web_interface/static/applications/data-lake/DriveApplication/utils";
+import BarChart from "./NetworkDirectedGraph/NetworkDirectedGraphComponent";
 
 
 export interface GraphWrapperProps {

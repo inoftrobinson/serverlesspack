@@ -1,8 +1,8 @@
 import * as React from 'react';
 import * as _ from 'lodash';
 import * as d3 from 'd3';
-import './dark_theme.scss';
-import {Point, SourceLinkItem, ClientNodeItem, ClientLinkItem} from "./models";
+import './style.scss';
+import {Point, SourceLinkItem, ClientNodeItem, ClientLinkItem} from "../models";
 
 
 export interface NetworkDirectedGraphProps {
