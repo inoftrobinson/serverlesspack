@@ -123,3 +123,6 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+serverlesspack/visualizer/node_modules
+serverlesspack/visualizer/package-lock.json
