@@ -56,33 +56,27 @@ export default class BarChart extends React.Component<NetworkDirectedGraphProps,
      * between the given line segment and the translated line segment equals
      * targetDistance
      */
-    private calcTranslation(targetDistance, point0, point1) {
-        var x1_x0 = point1.x - point0.x,
-            y1_y0 = point1.y - point0.y,
-            x2_x0,
-            y2_y0;
-        if (y1_y0 === 0) {
-            x2_x0 = 0;
-            y2_y0 = targetDistance;
-        } else {
-            var angle = Math.atan(x1_x0 / y1_y0);
-            x2_x0 = -targetDistance * Math.cos(angle);
-            y2_y0 = targetDistance * Math.sin(angle);
-        }
-        return {
-            dx: x2_x0,
-            dy: y2_y0
-        };
+    calcTranslation(targetDistance: number, point0: Point, point1: Point) {
+        const x1_x0 = point1.x - point0.x;
+        const y1_y0 = point1.y - point0.y;
+
+        const [x2_x0, y2_y0] = y1_y0 === 0 ? [0, targetDistance] : (() => {
+            const angle = Math.atan(x1_x0 / y1_y0);
+            const x2_x0 = -targetDistance * Math.cos(angle);
+            const y2_y0 = targetDistance * Math.sin(angle);
+            return [x2_x0, y2_y0];
+        })();
+        return {dx: x2_x0, dy: y2_y0};
     }
 
-    update(links) {
+    update(links: any[]) {
         console.log("CheckPt:update");
         console.log(links);
 
         // Use elliptical arc path segments to doubly-encode directionality.
         const ticked = () => {
             linkPath
-                .attr("d", d => `M${d.source.x},${d.source.y} L${d.target.x},${d.target.y}`)
+                .attr("d", (d) => `M${d.source.x},${d.source.y} L${d.target.x},${d.target.y}`)
                 .attr("transform", (d) => {
                     const translation = this.calcTranslation(
                         d.targetDistance * targetDistanceUnitLength,
@@ -96,13 +90,9 @@ export default class BarChart extends React.Component<NetworkDirectedGraphProps,
 
             linkLabel.attr("transform", (d) => {
                 if (d.target.x < d.source.x) {
-                    return (
-                        "rotate(180," +
-                        ((d.source.x + d.target.x) / 2 + d.offsetX) +
-                        "," +
-                        ((d.source.y + d.target.y) / 2 + d.offsetY) +
-                        ")"
-                    );
+                    const cor1: number = ((d.source.x + d.target.x) / 2 + d.offsetX);
+                    const cor2: number = ((d.source.y + d.target.y) / 2 + d.offsetY);
+                    return `rotate(180,${cor1},${cor2})`;
                 } else {
                     return "rotate(0)";
                 }
@@ -124,7 +114,7 @@ export default class BarChart extends React.Component<NetworkDirectedGraphProps,
                     : d.y >= height - forcePadding
                     ? height - forcePadding
                     : d.y;
-            return "translate(" + d.x + "," + d.y + ")";
+            return `translate(${d.x},${d.y})`;
         }
 
         const dragstarted = (event, d) => {
@@ -179,13 +169,13 @@ export default class BarChart extends React.Component<NetworkDirectedGraphProps,
         const forcePadding = nodeRadius + 10;
         const targetDistanceUnitLength = nodeRadius / 4;
 
-        var simulation = d3
+        const simulation = d3
             .forceSimulation()
             .force(
                 "link",
                 d3
                     .forceLink()
-                    .id(d => d.name)
+                    .id((d) => d.name)
                     .distance(200)
                     .links(links)
             )
