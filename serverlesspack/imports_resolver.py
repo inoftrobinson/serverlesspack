@@ -70,6 +70,7 @@ class Resolver:
         self.traces: List[dict] = []
 
     def save_traces_to_json(self):
+        #     common_prefix_across_all_files = os.path.commonprefix([absolute_filepath for absolute_filepath in included_files_absolute_paths])
         with open("F:/Inoft/anvers_1944_project/serverlesspack/serverlesspack/visualizer/dist/traces.json", "w+") as file:
             file.write(json.dumps(self.traces))
 

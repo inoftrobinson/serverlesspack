@@ -14,7 +14,7 @@ module.exports = smp.wrap({
 	mode: isProduction ? 'production' : 'development',
 	devtool: 'inline-source-map',
 	entry: {
-        'app': path.join(__dirname, './NetworkDirectedGraphComponent.tsx')
+        'app': path.join(__dirname, './GraphWrapperComponent.tsx')
     },
 	output: {
 		path: path.join(__dirname, `/dist/${isProduction ? 'prod': 'dev'}`),
