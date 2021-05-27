@@ -1,4 +1,4 @@
-type d3Link = {
+export type d3Link = {
     type: string;
     // source: { name: string },
     source: string,
@@ -7,8 +7,13 @@ type d3Link = {
     targetDistance: number;
 };
 
-type d3ClientLink = {
+export type d3ClientLink = {
     source: { name: string },
     target: { name: string },
     targetDistance: number;
+}
+
+export interface Point {
+    x: number;
+    y: number;
 }
