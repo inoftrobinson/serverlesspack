@@ -1,6 +1,7 @@
 import * as React from 'react';
 import * as _ from 'lodash';
 import * as d3 from 'd3';
+import './dark_theme.scss';
 import {Point, SourceLinkItem, ClientNodeItem, ClientLinkItem} from "./models";
 
 
@@ -24,7 +25,7 @@ export default class BarChart extends React.Component<NetworkDirectedGraphProps,
     private readonly forcePadding: number;
     private readonly targetDistanceUnitLength: number;
 
-    private simulation: d3.Simulation<d3.SimulationNodeDatum, undefined>;
+    private simulation: d3.Simulation<d3.SimulationNodeDatum, ClientLinkItem>;
     private linkPath: d3.Selection<SVGPathElement, ClientLinkItem, SVGGElement, unknown>;
     private linkLabel: d3.Selection<SVGTextElement, ClientLinkItem, SVGGElement, unknown>;
     private nodeCircle: d3.Selection<SVGCircleElement, any, SVGGElement, unknown>;
@@ -37,6 +38,9 @@ export default class BarChart extends React.Component<NetworkDirectedGraphProps,
         this.nodeRadius = 25;
         this.forcePadding = this.nodeRadius + 10;
         this.targetDistanceUnitLength = this.nodeRadius / 4;
+
+        this.ticked = this.ticked.bind(this);
+        this.transform = this.transform.bind(this);
 
         [this.links, this.nodes] = this.linksNodes();
         this.nodesValues = _.map(this.nodes);
@@ -54,10 +58,6 @@ export default class BarChart extends React.Component<NetworkDirectedGraphProps,
         this.linkLabel = dataDependantElements.linkLabel;
         this.nodeCircle = dataDependantElements.nodeCircle;
         this.nodeLabel = dataDependantElements.nodeLabel;
-
-        this.ticked = this.ticked.bind(this);
-        this.transform = this.transform.bind(this);
-
     }
 
     private linksNodes(): [ ClientLinkItem[], { [key: string]: ClientNodeItem } ] {
@@ -175,7 +175,7 @@ export default class BarChart extends React.Component<NetworkDirectedGraphProps,
             )
             .force("charge", d3.forceManyBody().strength(-200))
             .force("center", d3.forceCenter(this.props.width / 2, this.props.height / 2))
-            .on("tick", this.ticked.bind(this))
+            .on("tick", this.ticked)
             .nodes(this.nodesValues);
     }
 
