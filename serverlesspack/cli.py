@@ -56,6 +56,7 @@ def package_api(target_os: str, config_filepath: str, verbose: bool) -> PackageA
             excluded_folders_names=folder_config.excluded_folders_names,
             excluded_files_extensions=folder_config.excluded_files_extensions
         )
+    resolver.save_traces_to_json()
 
     output_base_dirpath: str = (
         Path(os.path.realpath(config.project_root_dir)).parent

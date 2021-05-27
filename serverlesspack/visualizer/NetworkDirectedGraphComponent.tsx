@@ -40,7 +40,8 @@ export default class BarChart extends React.Component<NetworkDirectedGraphProps,
     }
 
     componentDidMount() {
-      d3.json("input_graph_data.json").then((data) => {
+      // d3.json("input_graph_data.json").then((data) => {
+      d3.json("dist/traces.json").then((data) => {
           this.update(data)
       });
       // this.drawChart();
