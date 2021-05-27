@@ -1,13 +1,12 @@
 import * as React from 'react';
-import * as ReactDOM from 'react-dom';
 import * as _ from 'lodash';
 import * as d3 from 'd3';
-import {Point, d3Link} from "./models";
+import {Point, SourceLinkItem, ClientNodeItem, ClientLinkItem} from "./models";
 
 
 export interface NetworkDirectedGraphProps {
     id: string;
-    data: any[];
+    data: SourceLinkItem[];
     width: number;
     height: number;
 }
@@ -18,17 +17,19 @@ export interface NetworkDirectedGraphState {
 
 
 export default class BarChart extends React.Component<NetworkDirectedGraphProps, NetworkDirectedGraphState> {
+    private readonly links: ClientLinkItem[];
+    private readonly nodes: { [key: string]: ClientNodeItem };
+    private readonly nodesValues: ClientNodeItem[];
     private readonly nodeRadius: number;
     private readonly forcePadding: number;
     private readonly targetDistanceUnitLength: number;
-    private linkPath: d3.Selection<SVGPathElement, unknown, SVGGElement, unknown>;
-    private linkLabel: d3.Selection<SVGTextElement, unknown, SVGGElement, unknown>;
+
+    private linkPath: d3.Selection<SVGPathElement, ClientLinkItem, SVGGElement, unknown>;
+    private linkLabel: d3.Selection<SVGTextElement, ClientLinkItem, SVGGElement, unknown>;
     private simulation: d3.Simulation<d3.SimulationNodeDatum, undefined>;
     private nodeCircle: d3.Selection<SVGCircleElement, any, SVGGElement, unknown>;
     private nodeLabel: d3.Selection<SVGTextElement, any, SVGGElement, unknown>;
     private svg: d3.Selection<SVGSVGElement, unknown, HTMLElement, any>;
-    private links: any[];
-    private nodes: {};
 
     constructor(props: NetworkDirectedGraphProps) {
         super(props);
@@ -37,9 +38,8 @@ export default class BarChart extends React.Component<NetworkDirectedGraphProps,
         this.forcePadding = this.nodeRadius + 10;
         this.targetDistanceUnitLength = this.nodeRadius / 4;
 
-        const [links, nodes] = this.linksNodes();
-        this.links = links;
-        this.nodes = nodes;
+        [this.links, this.nodes] = this.linksNodes();
+        this.nodesValues = _.map(this.nodes);
         this.simulation = this.createSimulation();
 
         const chartContainer = d3.select(`#${this.props.id}`);
@@ -73,7 +73,7 @@ export default class BarChart extends React.Component<NetworkDirectedGraphProps,
         this.linkPath = svg
             .append("g")
             .selectAll("path")
-            .data(links)
+            .data(this.links)
             .enter()
             .append("path")
             .attr("id", (d, i) => `link-${i}`)
@@ -83,7 +83,7 @@ export default class BarChart extends React.Component<NetworkDirectedGraphProps,
         this.linkLabel = svg
             .append("g")
             .selectAll("text")
-            .data(links)
+            .data(this.links)
             .enter()
             .append("text")
             .attr("class", "link-label")
@@ -93,12 +93,12 @@ export default class BarChart extends React.Component<NetworkDirectedGraphProps,
             .append("textPath")
             .attr("href", (d, i) => `#link-${i}`)
             .attr("startOffset", "50%")
-            .text(d => d.type);
+            .text((d: ClientLinkItem) => d.type);
 
         this.nodeCircle = svg
             .append("g")
             .selectAll("circle")
-            .data(_.values(nodes))
+            .data(this.nodesValues)
             .enter()
             .append("circle")
             .attr("r", this.nodeRadius)
@@ -111,30 +111,31 @@ export default class BarChart extends React.Component<NetworkDirectedGraphProps,
         this.nodeLabel = svg
             .append("g")
             .selectAll("text")
-            .data(_.values(nodes))
+            .data(this.nodesValues)
             .enter()
             .append("text")
             .attr("class", "node-label")
             .attr("y", ".31em")
             .attr("text-anchor", "middle")
-            .text((d) => d.name);
+            .text((d: ClientNodeItem) => d.name);
 
     }
 
-    private linksNodes(): [ any[], {} ] {
-        const links = this.props.data;
-        const nodes = {};
+    private linksNodes(): [ ClientLinkItem[], { [key: string]: ClientNodeItem } ] {
+        const nodes: { [key: string]: ClientNodeItem } = {};
 
         // Compute the distinct nodes from the links.
-        links.forEach((link) => {
-            link.source = nodes[link.source] || (nodes[link.source] = {name: link.source});
-            link.target = nodes[link.target] || (nodes[link.target] = {name: link.target});
-        });
+        const links: ClientLinkItem[] = _.map(this.props.data, (linkItem: SourceLinkItem) => ({
+            targetDistance: 0,
+            type: linkItem.type,
+            offsetX: 0, offsetY: 0,
+            source: nodes[linkItem.source] || (nodes[linkItem.source] = {name: linkItem.source}),
+            target: nodes[linkItem.target] || (nodes[linkItem.target] = {name: linkItem.target})
+        }));
 
         // Compute targetDistance for each link
         for (let i = 0; i < links.length; i++) {
             if (links[i].targetDistance === -1) continue;
-            links[i].targetDistance = 0;
             for (let j = i + 1; j < links.length; j++) {
                 if (links[j].targetDistance === -1) continue;
                 if (
@@ -159,7 +160,6 @@ export default class BarChart extends React.Component<NetworkDirectedGraphProps,
 
     componentDidUpdate(prevProps: Readonly<NetworkDirectedGraphProps>, prevState: Readonly<NetworkDirectedGraphState>, snapshot?: any): void {
         if (this.props.width !== prevProps.width || this.props.height !== prevProps.height) {
-            console.log("should resize");
             this.resize();
         }
     }
@@ -204,28 +204,28 @@ export default class BarChart extends React.Component<NetworkDirectedGraphProps,
             .force("charge", d3.forceManyBody().strength(-200))
             .force("center", d3.forceCenter(this.props.width / 2, this.props.height / 2))
             .on("tick", this.ticked.bind(this))
-            .nodes(_.values(this.nodes));
+            .nodes(this.nodesValues);
     }
 
     // Use elliptical arc path segments to doubly-encode directionality.
     private ticked() {
         this.linkPath
-            .attr("d", (d) => `M${d.source.x},${d.source.y} L${d.target.x},${d.target.y}`)
-            .attr("transform", (d) => {
+            .attr("d", (link: ClientLinkItem) => `M${link.source.x},${link.source.y} L${link.target.x},${link.target.y}`)
+            .attr("transform", (link: ClientLinkItem) => {
                 const translation = this.calcTranslation(
-                    d.targetDistance * this.targetDistanceUnitLength,
-                    d.source,
-                    d.target
+                    link.targetDistance * this.targetDistanceUnitLength,
+                    link.source,
+                    link.target
                 );
-                d.offsetX = translation.dx;
-                d.offsetY = translation.dy;
-                return `translate (${d.offsetX}, ${d.offsetY})`;
+                link.offsetX = translation.dx;
+                link.offsetY = translation.dy;
+                return `translate (${link.offsetX}, ${link.offsetY})`;
             });
 
-        this.linkLabel.attr("transform", (d) => {
-            if (d.target.x < d.source.x) {
-                const cor1: number = ((d.source.x + d.target.x) / 2 + d.offsetX);
-                const cor2: number = ((d.source.y + d.target.y) / 2 + d.offsetY);
+        this.linkLabel.attr("transform", (link: ClientLinkItem) => {
+            if ((link.target.x as number) < (link.source.x as number)) {
+                const cor1: number = (((link.source.x as number) + (link.target.x as number)) / 2 + link.offsetX);
+                const cor2: number = (((link.source.y as number) + (link.target.y as number)) / 2 + link.offsetY);
                 return `rotate(180,${cor1},${cor2})`;
             } else {
                 return "rotate(0)";
@@ -235,20 +235,20 @@ export default class BarChart extends React.Component<NetworkDirectedGraphProps,
         this.nodeLabel.attr("transform", this.transform);
     }
 
-    private transform(d) {
-        d.x =
-            d.x <= this.forcePadding
+    private transform(node: ClientNodeItem) {
+        node.x =
+            (node.x as number) <= this.forcePadding
                 ? this.forcePadding
-                : d.x >= this.props.width - this.forcePadding
+                : (node.x as number) >= this.props.width - this.forcePadding
                 ? this.props.width - this.forcePadding
-                : d.x;
-        d.y =
-            d.y <= this.forcePadding
+                : (node.x as number);
+        node.y =
+            (node.y as number) <= this.forcePadding
                 ? this.forcePadding
-                : d.y >= this.props.height - this.forcePadding
+                : (node.y as number) >= this.props.height - this.forcePadding
                 ? this.props.height - this.forcePadding
-                : d.y;
-        return `translate(${d.x},${d.y})`;
+                : (node.y as number);
+        return `translate(${node.x},${node.y})`;
     }
 
     private dragstarted(event, d) {
@@ -266,33 +266,6 @@ export default class BarChart extends React.Component<NetworkDirectedGraphProps,
         if (!event.active) this.simulation.alphaTarget(0);
         d.fx = null;
         d.fy = null;
-    }
-
-    update(links: any[]) {
-        console.log("CheckPt:update");
-        console.log(links);
-
-
-
-        ////////////////////////////////////////////////////////////
-        //// Initial Setup /////////////////////////////////////////
-        ////////////////////////////////////////////////////////////
-        const width = this.props.width;
-        const height = this.props.height;
-
-        const nodeRadius = 25;
-
-        const forcePadding = nodeRadius + 10;
-        const targetDistanceUnitLength = nodeRadius / 4;
-
-        // const simulation = this.createSimulation();
-        // this.simulation = simulation;
-
-        ////////////////////////////////////////////////////////////
-        //// Render Chart //////////////////////////////////////////
-        ////////////////////////////////////////////////////////////
-
-
     }
 
     render() {

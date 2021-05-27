@@ -1,19 +1,25 @@
-export type d3Link = {
-    type: string;
-    // source: { name: string },
-    source: string,
-    // target: { name: string },
-    target: string,
-    targetDistance: number;
-};
-
-export type d3ClientLink = {
-    source: { name: string },
-    target: { name: string },
-    targetDistance: number;
-}
-
 export interface Point {
     x: number;
     y: number;
+}
+
+export interface SourceLinkItem {
+    source: string;
+    target: string;
+    type: string;
+}
+
+export interface ClientLinkItem {
+    source: ClientNodeItem;
+    target: ClientNodeItem;
+    type: string;
+    targetDistance: number;
+    offsetX: number;
+    offsetY: number;
+}
+
+export interface ClientNodeItem {
+    name: string;
+    x?: number;
+    y?: number;
 }
