@@ -1,3 +1,4 @@
+import json
 import sys
 import os
 import ast
@@ -65,6 +66,13 @@ class Resolver:
         self.included_dependencies_names: Set[str] = set()
         self.included_dependencies_distributions: Dict[str, Optional[EggInfoDistribution]] = dict()
         self.included_files_absolute_paths: Set[str] = {self.root_filepath}
+
+        self.traces: List[dict] = []
+
+    def save_traces_to_json(self):
+        #     common_prefix_across_all_files = os.path.commonprefix([absolute_filepath for absolute_filepath in included_files_absolute_paths])
+        with open("F:/Inoft/anvers_1944_project/serverlesspack/serverlesspack/visualizer/dist/traces.json", "w+") as file:
+            file.write(json.dumps(self.traces))
 
     @property
     def system_os(self) -> str:
@@ -171,17 +179,13 @@ class Resolver:
     def add_package_by_name(self, package_name: str, current_filepath: str):
         imported_package_module = self._import_module(module_name=package_name, filepath=current_filepath)
         if imported_package_module is not None:
-            d = imported_package_module.__dict__
             imported_package_module_filepath: Optional[str] = getattr(imported_package_module, '__file__', None)
-            import inspect
-            # rar = os.path.abspath(inspect.getsourcefile(imported_package_module))
             if imported_package_module_filepath is not None:
                 # Depending on the location of the build file compared to the location of the module filepath, we might
                 # need or might not need to remove the junk start of the path. So, we first check if the module filepath
                 # exists, if that's the case, we will use that, otherwise we will try to remove the junk start of the path.
                 if not os.path.exists(imported_package_module_filepath):
-                    pass
-                    # imported_package_module_filepath = os.path.join(*self._remove_junk_start_of_path(imported_package_module_filepath))
+                    imported_package_module_filepath = os.path.join(*self._remove_junk_start_of_path(imported_package_module_filepath))
                 imported_package_module_filepath = os.path.abspath(imported_package_module_filepath)
 
                 # At this point, the file should exists, we do not add an additional
@@ -228,6 +232,7 @@ class Resolver:
                     else:
                         # If the file is a standalone file not from a library
                         if imported_package_module_filepath not in self.included_files_absolute_paths:
+                            self.traces.append({'source': current_filepath, 'target': imported_package_module_filepath, 'type': "import"})
                             self.add_python_file(filepath=imported_package_module_filepath)
                             self.process_file(filepath=imported_package_module_filepath)
 
