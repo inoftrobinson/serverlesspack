@@ -120,11 +120,11 @@ def package_files(included_files_absolute_paths: Set[str], output_base_dirpath: 
             relative_filepath=relative_filepath, absolute_filepath=absolute_filepath
         ))
 
-        folder_parts = Path(os.path.dirname(relative_filepath)).parts
+        folder_parts: tuple = Path(os.path.dirname(relative_filepath)).parts
         for i_part in range(len(folder_parts)):
-            current_folder_part_relative_path = os.path.join(*folder_parts[0:i_part + 1])
-            expected_init_file_relative_filepath = os.path.join(current_folder_part_relative_path, "__init__.py")
-            expected_init_file_absolute_filepath = os.path.join(output_base_dirpath, expected_init_file_relative_filepath)
+            current_folder_part_relative_path: str = os.path.join(*folder_parts[0:i_part + 1])
+            expected_init_file_relative_filepath: str = os.path.join(current_folder_part_relative_path, "__init__.py")
+            expected_init_file_absolute_filepath: str = os.path.join(output_base_dirpath, expected_init_file_relative_filepath)
             if expected_init_file_absolute_filepath not in included_files_absolute_paths and expected_init_file_absolute_filepath not in content_files_items:
                 content_files_items[expected_init_file_relative_filepath] = factory.make_content_file_item(
                     content="", relative_filepath=expected_init_file_relative_filepath

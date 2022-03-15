@@ -60,7 +60,8 @@ def package_api(target_os: str, config_filepath: str, verbose: bool) -> PackageA
 
     output_base_dirpath: str = (
         Path(os.path.realpath(config.project_root_dir)).parent
-        if config.project_root_dir is not None else os.path.dirname(config_filepath)
+        if config.project_root_dir is not None else
+        os.path.dirname(os.path.abspath(config_filepath))
     )
 
     dist_dirpath = os.path.join(os.path.dirname(config_filepath), "dist")
