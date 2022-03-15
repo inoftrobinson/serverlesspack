@@ -54,7 +54,13 @@ class ConfigClient:
 
     @staticmethod
     def _render_config(source_config: SourceConfig, config_filepath: str, target_os: str) -> Config:
-        rendered_absolute_root_filepath = os.path.abspath(os.path.join(os.path.dirname(config_filepath), source_config.root_file))
+        config_location_dirpath: str = os.path.dirname(os.path.abspath(config_filepath))
+        # We need to abspath the config filepath before trying to get its dirname, because if the filepath is relative
+        # path without parent dir (ie, serverlesspack.config.yaml instead of something like app/serverlesspack.config.yaml)
+        # an immediate call to os.path.dirname would return None, which we do not want.
+        rendered_absolute_root_filepath: str = os.path.abspath(os.path.join(config_location_dirpath, source_config.root_file))
+        if not os.path.isfile(rendered_absolute_root_filepath):
+            raise Exception(f"No file found at {rendered_absolute_root_filepath}")
         if not os.path.isfile(rendered_absolute_root_filepath):
             raise Exception(f"No file found at {rendered_absolute_root_filepath}")
 
