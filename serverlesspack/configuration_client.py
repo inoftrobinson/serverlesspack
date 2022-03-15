@@ -1,6 +1,6 @@
 import os
 from dataclasses import dataclass
-from typing import Optional, List, Dict, Tuple, Literal
+from typing import Optional, List, Dict, Tuple, Literal, Set
 
 import click
 import yaml
@@ -18,6 +18,7 @@ class SourceConfig(BaseModel):
     project_root_dir: Optional[str] = None
     type: Optional[Literal['code', 'layer']] = None
     format: Optional[Literal['zip', 'folder']] = None
+    filepaths_includes: Optional[List[str]] = None
     class FolderIncludeItem(BaseFolderIncludeItem):
         additional_linux: Optional[BaseFolderIncludeItem] = None
         additional_windows: Optional[BaseFolderIncludeItem] = None
@@ -29,6 +30,7 @@ class Config:
     project_root_dir: Optional[str]
     type: Literal['code', 'layer']
     format: Literal['zip', 'folder']
+    filepaths_includes: Set[str]
     folders_includes: Dict[str, BaseFolderIncludeItem]
 
 
@@ -73,8 +75,15 @@ class ConfigClient:
             root_filepath=rendered_absolute_root_filepath,
             project_root_dir=source_config.project_root_dir,
             type=source_config.type, format=source_config.format,
-            folders_includes=dict()
+            filepaths_includes=set(),
+            folders_includes={},
         )
+
+        if source_config.filepaths_includes is not None:
+            for filepath in source_config.filepaths_includes:
+                absolute_filepath: str = os.path.abspath(filepath)
+                config.filepaths_includes.add(absolute_filepath)
+
         if source_config.folders_includes is not None:
             for folderpath, folder_config in source_config.folders_includes.items():
                 output_config_folder_include_item = BaseFolderIncludeItem()

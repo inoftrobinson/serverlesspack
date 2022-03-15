@@ -48,6 +48,13 @@ def package_api(target_os: str, config_filepath: str, verbose: bool) -> PackageA
 
     resolver = Resolver(root_filepath=config.root_filepath, target_os=target_os, verbose=verbose)
     resolver.process_file(config.root_filepath)
+
+    for filepath in config.filepaths_includes:
+        if os.path.exists(filepath):
+            # Technically, the filepath might not be a Python file, but we still use the
+            # add_python_file to potentially handle the case where it is a Python file.
+            resolver.add_python_file(filepath=filepath)
+
     for folderpath, folder_config in config.folders_includes.items():
         resolver.import_folder(
             folderpath=folderpath,
