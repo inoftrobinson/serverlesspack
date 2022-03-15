@@ -250,8 +250,8 @@ class Resolver:
             raise Exception(f"Filepath does not exist : {filepath}")
 
         if path_filepath.suffix == '.py':
-            file = path_filepath.open('r')
-            file_content = file.read()
+            with open(str(path_filepath), mode='r', encoding='utf-8') as file:
+                file_content = file.read()
             for node in ast.iter_child_nodes(ast.parse(file_content)):
                 self.process_node(node=node, current_module=filepath, current_filepath=filepath)
         else:

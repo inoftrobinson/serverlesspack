@@ -57,7 +57,7 @@ def make_absolute_python_layer_packages_dirpath(base_target_dirpath: str, python
 
 def install_packages_to_dir(packages_names: Set[str] or List[str], target_dirpath: str):
     packages_string = " ".join(packages_names)
-    return subprocess.run(f'pip install {packages_string} --target="{target_dirpath}"')
+    return subprocess.run(f'pip install {packages_string} --target="{target_dirpath}" --upgrade"')
 
 def package_lambda_layer(packages_names: Set[str] or List[str], target_dirpath: str, python_version: str):
     python_layer_packages_dirpath = make_absolute_python_layer_packages_dirpath(base_target_dirpath=target_dirpath, python_version=python_version)
@@ -68,9 +68,10 @@ def process_file(absolute_filepath: str, common_prefix_across_all_files: str) ->
     """
     :return: None if file did not required processing or its processing failed, processed content otherwise
     """
+    raise Exception("process_file is deprecated")
     path_absolute_filepath = Path(absolute_filepath)
     if path_absolute_filepath.suffix == '.py':
-        with open(absolute_filepath, 'r') as file:
+        with open(absolute_filepath, mode='r') as file:
             file_content = file.read()
             from .mutators_node_handlers import mutators_node_handlers_switch
             try:
@@ -182,10 +183,20 @@ def resolve_install_and_get_dependencies_files(resolver: Resolver, lambda_layer_
     # todo: add support for requirements.txt instead of fully relying on dependencies
     #  detection ? Or display insights into which requirements is not used
 
+    lambda_layer_dirpath: str = os.path.abspath(lambda_layer_dirpath)
+
+    """
     dependencies_names_requiring_installation = resolve_already_installed_dependencies(
         dependencies_distributions=resolver.included_dependencies_distributions,
         dirpath_to_search_into=lambda_layer_dirpath
     )
+    """
+    if os.path.exists(lambda_layer_dirpath):
+        shutil.rmtree(lambda_layer_dirpath)
+        # Remove all files in lambda_layer_dirpath to make sure to not
+        # package files from old builds that are not required in new one
+    dependencies_names_requiring_installation = resolver.included_dependencies_distributions
+
     if len(dependencies_names_requiring_installation) > 0:
         dependencies_installation_result = install_packages_to_dir(
             packages_names=resolver.included_dependencies_names,
