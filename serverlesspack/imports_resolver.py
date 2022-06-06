@@ -135,8 +135,6 @@ class Resolver:
         return None
 
     def _import_module(self, module_name: str, filepath: str) -> Optional[ModuleType]:
-        if module_name == 'phone_services_clients.Sim5ServiceClient':
-            print("hello")
         try:
             # We first try to import the module naively with only their
             # module name. This will work when trying to import libraries.
@@ -154,13 +152,6 @@ class Resolver:
             module_path = self._path_to_module_path(base_path=filepath_relative_to_current_module, module_name=module_name)
             # module_path, module_package = self._path_to_module_path(base_path=str(filepath_relative_to_current_module), module_name=module_name)
 
-            if module_name == 'phone_services_clients.Sim5ServiceClient':
-                module_name_parts = module_name.split(sep=".")
-                if len(module_name_parts) > 1:
-                    new_filepath: str = f"{os.path.join(os.path.dirname(filepath), *module_name_parts[0:-1])}/__init__.py"
-                    filepath = new_filepath
-                    module_name = module_name_parts[-1]
-                    self.add_package_by_name(package_name=module_name, current_filepath=filepath)
             try:
                 """if module_path is not None and module_package is not None:
                     return importlib.import_module(name=module_path, package=module_package)"""
@@ -250,9 +241,6 @@ class Resolver:
                             self.process_file(filepath=imported_package_module_filepath)
 
                         imported_package_module_name: Optional[str] = getattr(imported_package_module, '__name__', None)
-                        if "Sim5ServiceClient" in imported_package_module_name:
-                            print("hey")
-
                         if imported_package_module_name is not None:
                             imported_package_module_name_parts: List[str] = imported_package_module_name.split(sep=".")
                             if len(imported_package_module_name_parts) > 1:
@@ -260,10 +248,6 @@ class Resolver:
                                 current_filepath = parent_filepath
                                 for i, part in enumerate(imported_package_module_name_parts[0:-1]):
                                     current_filepath = os.path.join(current_filepath, part)
-
-                                    if "Sim5ServiceClient" in current_filepath:
-                                        print("hey")
-
                                     self.add_package_by_name(package_name=imported_package_module_name_parts[i+1], current_filepath=current_filepath)
                                     if os.path.exists(f"{current_filepath}.py"):
                                         self.add_package_by_name(package_name=imported_package_module_name_parts[i+1], current_filepath=f"{current_filepath}.py")
@@ -280,9 +264,6 @@ class Resolver:
         path_filepath = Path(filepath)
         if not path_filepath.exists():
             raise Exception(f"Filepath does not exist : {filepath}")
-
-        if 'phone_services_clients' in filepath:
-            print("hello")
 
         if path_filepath.suffix == '.py':
             with open(str(path_filepath), mode='r', encoding='utf-8') as file:

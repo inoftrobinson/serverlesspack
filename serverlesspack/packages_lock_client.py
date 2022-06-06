@@ -70,9 +70,6 @@ class PackagesLockClient:
             module_infos_bytes = subprocess.check_output([sys.executable, '-m', 'pip', 'show', module_data["module_name"]])
             module_infos_str = module_infos_bytes.decode()
 
-            if module_data['module_name'] == "PyYAML":
-                print("e")
-
             distribution = importlib.metadata.distribution(distribution_name=module_data['module_name'])
 
             location_matches = re.findall(r'(Location: )(.*)', module_infos_str)
