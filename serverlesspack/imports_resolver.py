@@ -283,8 +283,8 @@ class Resolver:
             if included_folders_names is not None or excluded_folders_names is not None:
                 dirs[:] = [
                     dirpath for dirpath in dirs
-                    if excluded_folders_names is None or Path(dirpath).name not in excluded_folders_names
-                    and included_folders_names is None or Path(dirpath).name in included_folders_names
+                    if (excluded_folders_names is None or Path(dirpath).name not in excluded_folders_names)
+                    and (included_folders_names is None or Path(dirpath).name in included_folders_names)
                 ]
 
             for filename in filenames:
