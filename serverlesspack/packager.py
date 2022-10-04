@@ -1,4 +1,5 @@
 import ast
+import logging
 import os
 import shutil
 import subprocess
@@ -55,13 +56,28 @@ def make_base_python_layer_packages_dir(python_version: str) -> str:
 def make_absolute_python_layer_packages_dirpath(base_target_dirpath: str, python_version: str) -> str:
     return f"{base_target_dirpath}/{make_base_python_layer_packages_dir(python_version=python_version)}"
 
-def install_packages_to_dir(packages_names: Set[str] or List[str], target_dirpath: str):
-    packages_string = " ".join(packages_names)
-    return subprocess.run(f'pip install {packages_string} --target="{target_dirpath}" --upgrade"')
+def download_packages_to_dir(packages_names: Set[str] or List[str], target_dirpath: str, python_version: str, platform: Optional[str] = None):
+    packages_string: str = " ".join(packages_names)
+    formatted_python_version: str = python_version.replace(".", "")
 
-def package_lambda_layer(packages_names: Set[str] or List[str], target_dirpath: str, python_version: str):
+    kwargs: Dict[str, Optional[str]] = {}
+    kwargs['dest'] = f'"{target_dirpath}"'
+    kwargs['only-binary=:all:'] = None
+    # We need to use an only-binary build mode in order be able to use python-version and platform arguments.
+    # As a side-note, using only-binary instead of a classical source install also slightly reduce the size of most packages.
+    kwargs['python-version'] = formatted_python_version
+    if platform is not None:
+        kwargs['platform'] = f'"{platform}"'
+
+    compiled_kwargs: str = " ".join([
+        f"--{key}{f' {value}' if value is not None else ''}"
+        for key, value in kwargs.items()
+    ])
+    return subprocess.run(f'pip download {packages_string} {compiled_kwargs}')
+
+def package_lambda_layer(packages_names: Set[str] or List[str], target_dirpath: str, python_version: str, platform: str):
     python_layer_packages_dirpath = make_absolute_python_layer_packages_dirpath(base_target_dirpath=target_dirpath, python_version=python_version)
-    return install_packages_to_dir(packages_names=packages_names, target_dirpath=python_layer_packages_dirpath)
+    return download_packages_to_dir(packages_names=packages_names, target_dirpath=python_layer_packages_dirpath, python_version=python_version, platform=platform)
 
 
 def process_file(absolute_filepath: str, common_prefix_across_all_files: str) -> Optional[str]:
@@ -145,9 +161,17 @@ def recursive_get_files_in_layer_folder(source_dirpath: str, base_layer_dirpath:
             ))
     return output_local_file_items
 
-def install_dependencies_and_get_files(dependencies_names: Set[str], target_dirpath: str, base_layer_dirpath: str) -> List[LocalFileItem]:
-    installation_result = install_packages_to_dir(packages_names=dependencies_names, target_dirpath=target_dirpath)
-    return recursive_get_files_in_layer_folder(source_dirpath=target_dirpath, base_layer_dirpath=base_layer_dirpath)
+def install_dependencies_and_get_files(
+        dependencies_names: Set[str], target_dirpath: str, base_layer_dirpath: str,
+        python_version: str, platform: Optional[str] = None
+) -> List[LocalFileItem]:
+    installation_result = download_packages_to_dir(
+        packages_names=dependencies_names, target_dirpath=target_dirpath,
+        python_version=python_version, platform=platform
+    )
+    return recursive_get_files_in_layer_folder(
+        source_dirpath=target_dirpath, base_layer_dirpath=base_layer_dirpath
+    )
 
 def resolve_already_installed_dependencies(dependencies_distributions: Dict[str, Optional[EggInfoDistribution]], dirpath_to_search_into: str) -> Set[str]:
     reused_dependencies_tree_data: Dict[str, dict] = dict()
@@ -178,7 +202,10 @@ def resolve_already_installed_dependencies(dependencies_distributions: Dict[str,
         print(LeftAligned()({'Re-used packages': reused_dependencies_tree_data}))
     return missing_dependencies_names
 
-def resolve_install_and_get_dependencies_files(resolver: Resolver, lambda_layer_dirpath: str, base_layer_dirpath: str) -> List[LocalFileItem]:
+def resolve_install_and_get_dependencies_files(
+        resolver: Resolver, lambda_layer_dirpath: str, base_layer_dirpath: str,
+        python_version: str
+) -> List[LocalFileItem]:
     # requirements = PackagesLockClient().open_requirements("./requirements.txt")
     # todo: add support for requirements.txt instead of fully relying on dependencies
     #  detection ? Or display insights into which requirements is not used
@@ -198,9 +225,23 @@ def resolve_install_and_get_dependencies_files(resolver: Resolver, lambda_layer_
     dependencies_names_requiring_installation = resolver.included_dependencies_distributions
 
     if len(dependencies_names_requiring_installation) > 0:
-        dependencies_installation_result = install_packages_to_dir(
+        # todo: move target_os_to_wheel_platforms out of this file and add support for windows system_os
+        target_os_to_wheel_platforms = {
+            'linux': "manylinux1_x86_64"
+        }
+        wheel_platform: Optional[str] = target_os_to_wheel_platforms.get(resolver.target_os, None)
+        # todo: add ability to custom wheel_platform in config file
+        if wheel_platform is None:
+            logging.warning(
+                f"Could not find a matching wheel platform for target_os {resolver.target_os}."
+                f"Defaulting to current system_os of {resolver.system_os}"
+            )
+
+        dependencies_installation_result = download_packages_to_dir(
             packages_names=resolver.included_dependencies_names,
             target_dirpath=lambda_layer_dirpath,
+            python_version=python_version,
+            platform=wheel_platform
         )
     dependencies_local_file_items = recursive_get_files_in_layer_folder(
         source_dirpath=lambda_layer_dirpath, base_layer_dirpath=base_layer_dirpath
