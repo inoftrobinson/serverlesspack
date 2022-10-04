@@ -29,7 +29,7 @@ def safe_get_package_files_handler(format_type: str):
 def prompt_python_version() -> str:
     return click.prompt(
         text="For which Python version do you want to create the layer ?",
-        type=click.Choice(['3.5', '3.6', '3.7', '3.8', '3.9']),
+        type=click.Choice(['3.5', '3.6', '3.7', '3.8', '3.9', '3.10']),
     )
 
 
@@ -110,7 +110,8 @@ def package_api(target_os: str, config_filepath: str, verbose: bool) -> PackageA
         else:
             lambda_layer_dirpath = os.path.join(dist_dirpath, 'lambda_layer')
             dependencies_local_file_items = resolve_install_and_get_dependencies_files(
-                resolver=resolver, lambda_layer_dirpath=lambda_layer_dirpath, base_layer_dirpath=base_layer_dirpath
+                resolver=resolver, lambda_layer_dirpath=lambda_layer_dirpath, base_layer_dirpath=base_layer_dirpath,
+                python_version=selected_python_version
             )
             lambda_layer_format = click.prompt(text="Format", type=click.Choice(['zip', 'folder']))
             lambda_layer_format_handler = safe_get_package_files_handler(format_type=lambda_layer_format)
