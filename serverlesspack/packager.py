@@ -58,22 +58,23 @@ def make_absolute_python_layer_packages_dirpath(base_target_dirpath: str, python
 
 def download_packages_to_dir(packages_names: Set[str] or List[str], target_dirpath: str, python_version: str, platform: Optional[str] = None):
     packages_string: str = " ".join(packages_names)
-    formatted_python_version: str = python_version.replace(".", "")
 
     kwargs: Dict[str, Optional[str]] = {}
-    kwargs['dest'] = f'"{target_dirpath}"'
+    kwargs['target'] = f'"{target_dirpath}"'
+    kwargs['implementation'] = 'cp'
     kwargs['only-binary=:all:'] = None
     # We need to use an only-binary build mode in order be able to use python-version and platform arguments.
     # As a side-note, using only-binary instead of a classical source install also slightly reduce the size of most packages.
-    kwargs['python-version'] = formatted_python_version
+    kwargs['python'] = python_version
     if platform is not None:
         kwargs['platform'] = f'"{platform}"'
+    kwargs['upgrade'] = None
 
     compiled_kwargs: str = " ".join([
         f"--{key}{f' {value}' if value is not None else ''}"
         for key, value in kwargs.items()
     ])
-    return subprocess.run(f'pip download {packages_string} {compiled_kwargs}')
+    return subprocess.run(f'pip install {packages_string} {compiled_kwargs}')
 
 def package_lambda_layer(packages_names: Set[str] or List[str], target_dirpath: str, python_version: str, platform: str):
     python_layer_packages_dirpath = make_absolute_python_layer_packages_dirpath(base_target_dirpath=target_dirpath, python_version=python_version)
@@ -227,7 +228,7 @@ def resolve_install_and_get_dependencies_files(
     if len(dependencies_names_requiring_installation) > 0:
         # todo: move target_os_to_wheel_platforms out of this file and add support for windows system_os
         target_os_to_wheel_platforms = {
-            'linux': "manylinux1_x86_64"
+            'linux': "manylinux2014_x86_64"
         }
         wheel_platform: Optional[str] = target_os_to_wheel_platforms.get(resolver.target_os, None)
         # todo: add ability to custom wheel_platform in config file
