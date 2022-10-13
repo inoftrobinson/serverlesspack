@@ -199,24 +199,28 @@ class Resolver:
 
                     if self.system_os == 'windows' and path_imported_package_module_filepath.suffix == '.pyd':
                         if self.target_os == 'linux':
-                            path_imported_package_module_filepath = path_imported_package_module_filepath.with_suffix('.so')
-                            imported_package_module_filepath = str(path_imported_package_module_filepath)
-                            if not path_imported_package_module_filepath.is_file():
+                            linux_path_imported_package_module_filepath = path_imported_package_module_filepath.with_suffix('.so')
+                            if linux_path_imported_package_module_filepath.is_file():
+                                path_imported_package_module_filepath = linux_path_imported_package_module_filepath
+                                imported_package_module_filepath = str(path_imported_package_module_filepath)
+                            else:
                                 self._verbose_print(make_no_os_matching_file_warning_message(
                                     system_os=self.system_os, target_os=self.target_os,
-                                    source_filepath=str(path_imported_package_module_filepath)
+                                    source_filepath=str(linux_path_imported_package_module_filepath)
                                 ))
-                                return
+                                # return
                     elif self.system_os == 'linux' and path_imported_package_module_filepath == '.so':
                         if self.target_os == 'windows':
-                            path_imported_package_module_filepath = path_imported_package_module_filepath.with_suffix('.pyd')
-                            imported_package_module_filepath = str(path_imported_package_module_filepath)
-                            if not path_imported_package_module_filepath.is_file():
+                            windows_path_imported_package_module_filepath = path_imported_package_module_filepath.with_suffix('.pyd')
+                            if windows_path_imported_package_module_filepath.is_file():
+                                path_imported_package_module_filepath = windows_path_imported_package_module_filepath
+                                imported_package_module_filepath = str(path_imported_package_module_filepath)
+                            else:
                                 self._verbose_print(make_no_os_matching_file_warning_message(
                                     system_os=self.system_os, target_os=self.target_os,
-                                    source_filepath=str(path_imported_package_module_filepath)
+                                    source_filepath=str(windows_path_imported_package_module_filepath)
                                 ))
-                                return
+                                # return
 
                     package_distribution_name = get_distribution_name_of_package(package_filepath=imported_package_module_filepath)
                     if package_distribution_name is not None:
