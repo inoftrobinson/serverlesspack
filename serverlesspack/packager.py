@@ -3,6 +3,7 @@ import logging
 import os
 import shutil
 import subprocess
+import uuid
 from pathlib import Path
 from typing import List, Dict, Set, Optional, Tuple
 
@@ -56,7 +57,10 @@ def make_base_python_layer_packages_dir(python_version: str) -> str:
 def make_absolute_python_layer_packages_dirpath(base_target_dirpath: str, python_version: str) -> str:
     return f"{base_target_dirpath}/{make_base_python_layer_packages_dir(python_version=python_version)}"
 
-def download_packages_to_dir(packages_names: Set[str] or List[str], target_dirpath: str, python_version: str, platform: Optional[str] = None):
+def _construct_pip_install_packages_command(
+        packages_names: Set[str] or List[str], target_dirpath: str,
+        python_version: str, platform: Optional[str] = None
+) -> str:
     packages_string: str = " ".join(packages_names)
 
     kwargs: Dict[str, Optional[str]] = {}
@@ -74,7 +78,55 @@ def download_packages_to_dir(packages_names: Set[str] or List[str], target_dirpa
         f"--{key}{f' {value}' if value is not None else ''}"
         for key, value in kwargs.items()
     ])
-    return subprocess.run(f'pip install {packages_string} {compiled_kwargs}')
+    return f'pip install {packages_string} {compiled_kwargs}'
+
+def download_packages_to_dir(
+        packages_names: Set[str] or List[str], target_dirpath: str,
+        python_version: str, platform: Optional[str] = None
+):
+    pip_install_command: str = _construct_pip_install_packages_command(
+        packages_names=packages_names, target_dirpath=target_dirpath,
+        python_version=python_version, platform=platform
+    )
+    return subprocess.run(pip_install_command)
+
+def download_packages_to_dir_with_docker_container(
+        packages_names: Set[str] or List[str], target_dirpath: str,
+        python_version: str, platform: Optional[str] = None
+):
+    def get_free_output_path():
+        import os
+        appdata_dirpath: Optional[str] = os.getenv('APPDATA')
+        if appdata_dirpath is None:
+            raise Exception("APPDATA not defined in Python environment")
+
+        for i_attempt in range(10):
+            build_id: str = str(uuid.uuid4())
+            output_path: str = os.path.join(appdata_dirpath, "serverlesspack", build_id)
+            if not os.path.exists(output_path):
+                return output_path
+        raise Exception("Could not find a free output path after max attempts")
+
+    source_path: str = get_free_output_path()
+    os.makedirs(source_path)
+    print(f"Created a temporary output path at : {source_path}")
+    # We create a temporary output path instead of directly mouting the folder, because Docker only support
+    # mounting of folders that are on the main hardrive. This "hack" allow to use external harddrives.
+
+    pip_install_command: str = _construct_pip_install_packages_command(
+        packages_names=packages_names, target_dirpath='/output',
+        python_version=python_version, platform=platform
+    )
+    docker_wrapped_pip_install_command: str = (
+        f'docker run --mount type=bind,source={source_path},target=/output "public.ecr.aws/sam/build-python{python_version}" /bin/sh -c "{pip_install_command}; exit"'
+    )
+    # Command inspired from : https://aws.amazon.com/premiumsupport/knowledge-center/lambda-layer-simulated-docker/
+    subprocess.run(docker_wrapped_pip_install_command)
+
+    shutil.move(source_path, target_dirpath)
+
+
+download_packages_to_dir = download_packages_to_dir_with_docker_container
 
 def package_lambda_layer(packages_names: Set[str] or List[str], target_dirpath: str, python_version: str, platform: str):
     python_layer_packages_dirpath = make_absolute_python_layer_packages_dirpath(base_target_dirpath=target_dirpath, python_version=python_version)
