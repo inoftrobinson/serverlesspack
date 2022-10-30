@@ -45,6 +45,7 @@ def package_api(target_os: str, config_filepath: str, verbose: bool) -> PackageA
 
     package_files_handler = safe_get_package_files_handler(format_type=config.format)
     selected_python_version = prompt_python_version()
+    should_save_traces_file: bool = click.confirm("Should save traces file ?")
 
     resolver = Resolver(root_filepath=config.root_filepath, target_os=target_os, verbose=verbose)
     resolver.process_file(config.root_filepath)
@@ -63,7 +64,9 @@ def package_api(target_os: str, config_filepath: str, verbose: bool) -> PackageA
             excluded_folders_names=folder_config.excluded_folders_names,
             excluded_files_extensions=folder_config.excluded_files_extensions
         )
-    resolver.save_traces_to_json()
+
+    if should_save_traces_file is True:
+        resolver.save_traces_to_json()
 
     output_base_dirpath: str = (
         Path(os.path.realpath(config.project_root_dir)).parent
@@ -85,7 +88,11 @@ def package_api(target_os: str, config_filepath: str, verbose: bool) -> PackageA
         )
         lambda_layer_dirpath = os.path.join(dist_dirpath, 'lambda_layer')
         dependencies_local_file_items = resolve_install_and_get_dependencies_files(
-            resolver=resolver, lambda_layer_dirpath=lambda_layer_dirpath, base_layer_dirpath=base_layer_dirpath
+            resolver=resolver,
+            lambda_layer_dirpath=lambda_layer_dirpath,
+            base_layer_dirpath=base_layer_dirpath,
+            python_version=selected_python_version,
+            use_prototype_docker_install=config.use_prototype_docker_pip_install
         )
         # We package both the application files and the dependencies files under the
         # build key (which will output either a build.zip file or a build folder)
@@ -110,8 +117,11 @@ def package_api(target_os: str, config_filepath: str, verbose: bool) -> PackageA
         else:
             lambda_layer_dirpath = os.path.join(dist_dirpath, 'lambda_layer')
             dependencies_local_file_items = resolve_install_and_get_dependencies_files(
-                resolver=resolver, lambda_layer_dirpath=lambda_layer_dirpath, base_layer_dirpath=base_layer_dirpath,
-                python_version=selected_python_version
+                resolver=resolver,
+                lambda_layer_dirpath=lambda_layer_dirpath,
+                base_layer_dirpath=base_layer_dirpath,
+                python_version=selected_python_version,
+                use_prototype_docker_install=config.use_prototype_docker_pip_install
             )
             lambda_layer_format = click.prompt(text="Format", type=click.Choice(['zip', 'folder']))
             lambda_layer_format_handler = safe_get_package_files_handler(format_type=lambda_layer_format)

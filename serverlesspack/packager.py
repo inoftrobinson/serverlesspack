@@ -126,53 +126,6 @@ def download_packages_to_dir_with_docker_container(
     shutil.move(source_path, target_dirpath)
 
 
-download_packages_to_dir = download_packages_to_dir_with_docker_container
-
-def package_lambda_layer(packages_names: Set[str] or List[str], target_dirpath: str, python_version: str, platform: str):
-    python_layer_packages_dirpath = make_absolute_python_layer_packages_dirpath(base_target_dirpath=target_dirpath, python_version=python_version)
-    return download_packages_to_dir(packages_names=packages_names, target_dirpath=python_layer_packages_dirpath, python_version=python_version, platform=platform)
-
-
-def process_file(absolute_filepath: str, common_prefix_across_all_files: str) -> Optional[str]:
-    """
-    :return: None if file did not required processing or its processing failed, processed content otherwise
-    """
-    raise Exception("process_file is deprecated")
-    path_absolute_filepath = Path(absolute_filepath)
-    if path_absolute_filepath.suffix == '.py':
-        with open(absolute_filepath, mode='r') as file:
-            file_content = file.read()
-            from .mutators_node_handlers import mutators_node_handlers_switch
-            try:
-                file_content_lines: List[str] = file_content.splitlines()
-                processed_content_lines: List[str] = []
-
-                if "editor_blueprint.py" in absolute_filepath:
-                    print("e")
-
-                last_line_num: int = 0
-                for node in ast.iter_child_nodes(ast.parse(file_content)):
-                    if node.lineno > last_line_num + 1:
-                        lines_to_add: List[str] = file_content_lines[last_line_num:node.lineno-1]
-                        processed_content_lines.extend(lines_to_add)
-                        # last_line_num =
-                    last_line_num: int = node.end_lineno
-
-                    handler = mutators_node_handlers_switch.get(node.__class__, None)
-                    modified_content: Optional[str] = handler(common_prefix_across_all_files, node, absolute_filepath)
-                    if modified_content is None:
-                        processed_content_lines.extend(file_content_lines[node.lineno-1:node.end_lineno-1])
-                    else:
-                        processed_content_lines.append(modified_content)
-                output_file_content = "\n".join(processed_content_lines)
-                return output_file_content
-            except SyntaxError as e:
-                print(message_with_vars(
-                    message="Python file contained a syntax error. The file has been packaged but not fully processed.",
-                    vars_dict={'filepath': absolute_filepath, 'exception': e}
-                ))
-    return None
-
 def package_files(included_files_absolute_paths: Set[str], output_base_dirpath: str, archive_prefix: Optional[str] = None) -> Tuple[List[LocalFileItem], List[ContentFileItem]]:
     local_files_items: List[LocalFileItem] = list()
     content_files_items: Dict[str, ContentFileItem] = dict()
@@ -214,18 +167,6 @@ def recursive_get_files_in_layer_folder(source_dirpath: str, base_layer_dirpath:
             ))
     return output_local_file_items
 
-def install_dependencies_and_get_files(
-        dependencies_names: Set[str], target_dirpath: str, base_layer_dirpath: str,
-        python_version: str, platform: Optional[str] = None
-) -> List[LocalFileItem]:
-    installation_result = download_packages_to_dir(
-        packages_names=dependencies_names, target_dirpath=target_dirpath,
-        python_version=python_version, platform=platform
-    )
-    return recursive_get_files_in_layer_folder(
-        source_dirpath=target_dirpath, base_layer_dirpath=base_layer_dirpath
-    )
-
 def resolve_already_installed_dependencies(dependencies_distributions: Dict[str, Optional[EggInfoDistribution]], dirpath_to_search_into: str) -> Set[str]:
     reused_dependencies_tree_data: Dict[str, dict] = dict()
     missing_dependencies_names: Set[str] = set()
@@ -257,7 +198,7 @@ def resolve_already_installed_dependencies(dependencies_distributions: Dict[str,
 
 def resolve_install_and_get_dependencies_files(
         resolver: Resolver, lambda_layer_dirpath: str, base_layer_dirpath: str,
-        python_version: str
+        python_version: str, use_prototype_docker_install: bool = False
 ) -> List[LocalFileItem]:
     # requirements = PackagesLockClient().open_requirements("./requirements.txt")
     # todo: add support for requirements.txt instead of fully relying on dependencies
@@ -290,12 +231,20 @@ def resolve_install_and_get_dependencies_files(
                 f"Defaulting to current system_os of {resolver.system_os}"
             )
 
-        dependencies_installation_result = download_packages_to_dir(
-            packages_names=resolver.included_dependencies_names,
-            target_dirpath=lambda_layer_dirpath,
-            python_version=python_version,
-            platform=wheel_platform
-        )
+        if use_prototype_docker_install is not True:
+            dependencies_installation_result = download_packages_to_dir(
+                packages_names=resolver.included_dependencies_names,
+                target_dirpath=lambda_layer_dirpath,
+                python_version=python_version,
+                platform=wheel_platform
+            )
+        else:
+            dependencies_installation_result = download_packages_to_dir_with_docker_container(
+                packages_names=resolver.included_dependencies_names,
+                target_dirpath=lambda_layer_dirpath,
+                python_version=python_version,
+                platform=wheel_platform
+            )
     dependencies_local_file_items = recursive_get_files_in_layer_folder(
         source_dirpath=lambda_layer_dirpath, base_layer_dirpath=base_layer_dirpath
     )

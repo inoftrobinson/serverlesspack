@@ -1,6 +1,5 @@
 import unittest
 from serverlesspack.imports_resolver import Resolver
-from serverlesspack.packager import package_lambda_layer, package_files
 
 
 class TestImportSpecialFiles(unittest.TestCase):

@@ -23,6 +23,7 @@ class SourceConfig(BaseModel):
         additional_linux: Optional[BaseFolderIncludeItem] = None
         additional_windows: Optional[BaseFolderIncludeItem] = None
     folders_includes: Optional[Dict[str, Optional[FolderIncludeItem]]] = None
+    use_prototype_docker_pip_install: Optional[bool] = False
 
 @dataclass
 class Config:
@@ -32,6 +33,7 @@ class Config:
     format: Literal['zip', 'folder']
     filepaths_includes: Set[str]
     folders_includes: Dict[str, BaseFolderIncludeItem]
+    use_prototype_docker_pip_install: bool
 
 
 class ConfigClient:
@@ -77,6 +79,7 @@ class ConfigClient:
             type=source_config.type, format=source_config.format,
             filepaths_includes=set(),
             folders_includes={},
+            use_prototype_docker_pip_install=source_config.use_prototype_docker_pip_install
         )
 
         if source_config.filepaths_includes is not None:
