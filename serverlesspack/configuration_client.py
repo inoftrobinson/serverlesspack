@@ -36,7 +36,7 @@ class Config:
     python_version: str
     filepaths_includes: Set[str]
     folders_includes: Dict[str, BaseFolderIncludeItem]
-    global_exclusions: BaseExcludeItem
+    global_exclusions: Optional[BaseExcludeItem] = None
     use_prototype_docker_pip_install: bool
 
 
@@ -92,6 +92,7 @@ class ConfigClient:
             python_version=source_config.python_version,
             filepaths_includes=set(),
             folders_includes={},
+            global_exclusions=None,
             use_prototype_docker_pip_install=source_config.use_prototype_docker_pip_install
         )
 
