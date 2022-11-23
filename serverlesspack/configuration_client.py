@@ -36,7 +36,7 @@ class Config:
     python_version: str
     filepaths_includes: Set[str]
     folders_includes: Dict[str, BaseFolderIncludeItem]
-    global_exclusions: Optional[BaseExcludeItem] = None
+    global_exclusions: Optional[BaseExcludeItem]
     use_prototype_docker_pip_install: bool
 
 
@@ -51,7 +51,7 @@ class ConfigClient:
         with open(filepath) as config_file:
             config_data = yaml.safe_load(config_file) or dict()
             try:
-                config = SourceConfig(**config_data, **(overriding_attributes or {}))
+                config = SourceConfig(**{**config_data, **(overriding_attributes or {})})
                 return ConfigClient._render_config(source_config=config, config_filepath=filepath, target_os=target_os)
             except ValidationError as e:
                 raise Exception(f"Error in the config file : {e}")
