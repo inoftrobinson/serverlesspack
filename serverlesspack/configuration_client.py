@@ -79,7 +79,7 @@ class ConfigClient:
             import click
             source_config.format = click.prompt(text="Format type", type=click.Choice(['zip', 'folder']))
         if source_config.python_version is None:
-            from serverlesspack.serverlesspack.cli import PythonVersion
+            from .cli import PythonVersion
             source_config.python_version = click.prompt(
                 text="For which Python version do you want to create the layer ?",
                 type=click.Choice([e.value for e in PythonVersion]),
