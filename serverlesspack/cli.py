@@ -1,5 +1,6 @@
 import os
 from dataclasses import dataclass
+from enum import Enum
 from pathlib import Path
 from typing import List, Callable, Dict, Optional
 
@@ -15,6 +16,17 @@ class PackageApiOutput:
     code_path: str
     layer_path: Optional[str]
 
+class FormatType(Enum):
+    zip = 'zip'
+    code = 'code'
+
+class PythonVersion(Enum):
+    _36 = '3.6'
+    _37 = '3.7'
+    _38 = '3.8'
+    _39 = '3.9'
+    _310 = '3.10'
+
 
 package_files_handlers_by_format_switch: Dict[str, Callable[[str, str, List[LocalFileItem], List[ContentFileItem]], str]] = {
     'zip': files_to_zip, 'folder': files_to_folder
@@ -26,26 +38,42 @@ def safe_get_package_files_handler(format_type: str):
     return handler
 
 
-def prompt_python_version() -> str:
-    return click.prompt(
-        text="For which Python version do you want to create the layer ?",
-        type=click.Choice(['3.5', '3.6', '3.7', '3.8', '3.9', '3.10']),
-    )
-
-
 @click.command()
 @click.option('-os', '--target_os', prompt="OS to compile to", type=click.Choice(['windows', 'linux']))
 @click.option('-config', '--config_filepath', prompt="Filepath of config file", type=click.Path(exists=True))
-@click.option('-v', '--verbose', type=bool)
-def package_cli(target_os: str, config_filepath: str, verbose: bool):
-    package_api(target_os=target_os, config_filepath=config_filepath, verbose=verbose)
+@click.option('-v', '--verbose', type=bool, required=False)
+@click.option('-f', '--format_type', type=click.Choice([e.value for e in FormatType]), required=False)
+@click.option('-pv', '--python_version', type=click.Choice([e.value for e in FormatType]), required=False)
+@click.option('-t', '--should_save_trace_files', type=bool, required=False)
+def package_cli(
+        target_os: str, config_filepath: str, verbose: bool = False,
+        format_type: Optional[FormatType] = None, python_version: Optional[PythonVersion] = None,
+        should_save_trace_files: Optional[bool] = None
+):
+    package_api(
+        target_os=target_os, config_filepath=config_filepath, verbose=verbose,
+        format_type=format_type, python_version=python_version,
+        should_save_trace_files=should_save_trace_files
+    )
 
-def package_api(target_os: str, config_filepath: str, verbose: bool) -> PackageApiOutput:
-    config = ConfigClient(verbose=verbose).load_render_config_file(filepath=config_filepath, target_os=target_os)
+def package_api(
+        target_os: str, config_filepath: str, verbose: bool = False,
+        format_type: Optional[FormatType] = None, python_version: Optional[PythonVersion] = None,
+        should_save_trace_files: Optional[bool] = None
+) -> PackageApiOutput:
+
+    if should_save_trace_files is None:
+        should_save_trace_files = click.confirm("Should save traces file ?")
+    should_save_trace_files: bool
+
+    config = ConfigClient(verbose=verbose).load_render_config_file(
+        filepath=config_filepath, target_os=target_os,
+        overriding_attributes={
+            'format': format_type, 'python_version': python_version
+        }
+    )
 
     package_files_handler = safe_get_package_files_handler(format_type=config.format)
-    selected_python_version = prompt_python_version()
-    should_save_traces_file: bool = click.confirm("Should save traces file ?")
 
     resolver = Resolver(root_filepath=config.root_filepath, target_os=target_os, verbose=verbose)
     resolver.process_file(config.root_filepath)
@@ -65,7 +93,7 @@ def package_api(target_os: str, config_filepath: str, verbose: bool) -> PackageA
             excluded_files_extensions=folder_config.excluded_files_extensions
         )
 
-    if should_save_traces_file is True:
+    if should_save_trace_files is True:
         resolver.save_traces_to_json()
 
     output_base_dirpath: str = (
@@ -81,7 +109,7 @@ def package_api(target_os: str, config_filepath: str, verbose: bool) -> PackageA
     if config.type == 'layer':
         # When packaging as a layer, we package the applications files with a base_layer_dirpath as the archive_prefix,
         # and we always install/resolve the dependencies of the applications in the same package as the application files.
-        base_layer_dirpath = make_base_python_layer_packages_dir(python_version=selected_python_version)
+        base_layer_dirpath = make_base_python_layer_packages_dir(python_version=config.python_version)
         local_file_items, content_file_items = package_files(
             included_files_absolute_paths=resolver.included_files_absolute_paths,
             archive_prefix=base_layer_dirpath, output_base_dirpath=output_base_dirpath
@@ -91,7 +119,7 @@ def package_api(target_os: str, config_filepath: str, verbose: bool) -> PackageA
             resolver=resolver,
             lambda_layer_dirpath=lambda_layer_dirpath,
             base_layer_dirpath=base_layer_dirpath,
-            python_version=selected_python_version,
+            python_version=config.python_version,
             use_prototype_docker_install=config.use_prototype_docker_pip_install
         )
         # We package both the application files and the dependencies files under the
@@ -104,12 +132,12 @@ def package_api(target_os: str, config_filepath: str, verbose: bool) -> PackageA
     elif config.type == 'code':
         # When packaging as code we package the application files without any archive_prefix, which we will then package.
         # After that, was ask the user if he want to package his applications dependencies as a lambda layer.
-        base_layer_dirpath = make_base_python_layer_packages_dir(python_version=selected_python_version)
+        base_layer_dirpath = make_base_python_layer_packages_dir(python_version=config.python_version)
         local_file_items, content_file_items = package_files(
             included_files_absolute_paths=resolver.included_files_absolute_paths,
             output_base_dirpath=output_base_dirpath
         )
-        code_output_path = package_files_handler(dist_dirpath, 'build', local_file_items, content_file_items)
+        code_output_path: str = package_files_handler(dist_dirpath, 'build', local_file_items, content_file_items)
         # We first package the applications files under the build key
 
         if not click.confirm("Package your application dependencies as lambda layer ?"):
@@ -120,11 +148,10 @@ def package_api(target_os: str, config_filepath: str, verbose: bool) -> PackageA
                 resolver=resolver,
                 lambda_layer_dirpath=lambda_layer_dirpath,
                 base_layer_dirpath=base_layer_dirpath,
-                python_version=selected_python_version,
+                python_version=config.python_version,
                 use_prototype_docker_install=config.use_prototype_docker_pip_install
             )
-            lambda_layer_format = click.prompt(text="Format", type=click.Choice(['zip', 'folder']))
-            lambda_layer_format_handler = safe_get_package_files_handler(format_type=lambda_layer_format)
+            lambda_layer_format_handler = safe_get_package_files_handler(format_type=config.format)
             layer_output_path = lambda_layer_format_handler(dist_dirpath, 'lambda_layer', dependencies_local_file_items, [])
             # Then, if the user asked to package his dependencies, we package them under the lambda_layer
             # key (which will output either a lambda_layer.zip file or a lambda_layer folder)

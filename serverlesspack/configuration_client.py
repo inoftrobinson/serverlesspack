@@ -2,27 +2,29 @@ import os
 from dataclasses import dataclass
 from typing import Optional, List, Dict, Tuple, Literal, Set
 
-import click
 import yaml
 from pydantic import ValidationError, BaseModel, Field
 
-
-class BaseFolderIncludeItem(BaseModel):
-    included_files_extensions: Optional[List[str]] = None
-    included_folders_names: Optional[List[str]] = None
+class BaseExcludeItem(BaseModel):
     excluded_files_extensions: Optional[List[str]] = Field(default_factory=list)
     excluded_folders_names: Optional[List[str]] = Field(default_factory=list)
+
+class BaseFolderIncludeItem(BaseExcludeItem):
+    included_files_extensions: Optional[List[str]] = None
+    included_folders_names: Optional[List[str]] = None
 
 class SourceConfig(BaseModel):
     root_file: str
     project_root_dir: Optional[str] = None
     type: Optional[Literal['code', 'layer']] = None
     format: Optional[Literal['zip', 'folder']] = None
+    python_version: Optional[str] = None
     filepaths_includes: Optional[List[str]] = None
     class FolderIncludeItem(BaseFolderIncludeItem):
         additional_linux: Optional[BaseFolderIncludeItem] = None
         additional_windows: Optional[BaseFolderIncludeItem] = None
     folders_includes: Optional[Dict[str, Optional[FolderIncludeItem]]] = None
+    global_exclusions: Optional[BaseExcludeItem] = None  # todo: implement this
     use_prototype_docker_pip_install: Optional[bool] = False
 
 @dataclass
@@ -31,8 +33,10 @@ class Config:
     project_root_dir: Optional[str]
     type: Literal['code', 'layer']
     format: Literal['zip', 'folder']
+    python_version: str
     filepaths_includes: Set[str]
     folders_includes: Dict[str, BaseFolderIncludeItem]
+    global_exclusions: BaseExcludeItem
     use_prototype_docker_pip_install: bool
 
 
@@ -40,14 +44,14 @@ class ConfigClient:
     def __init__(self, verbose: bool = False):
         self.verbose = verbose
 
-    def load_render_config_file(self, filepath: str, target_os: str) -> Config:
+    def load_render_config_file(self, filepath: str, target_os: str, overriding_attributes: Optional[dict] = None) -> Config:
         if not os.path.exists(filepath):
             raise Exception(f"Config file not found at : {filepath}")
 
         with open(filepath) as config_file:
             config_data = yaml.safe_load(config_file) or dict()
             try:
-                config = SourceConfig(**config_data)
+                config = SourceConfig(**config_data, **(overriding_attributes or {}))
                 return ConfigClient._render_config(source_config=config, config_filepath=filepath, target_os=target_os)
             except ValidationError as e:
                 raise Exception(f"Error in the config file : {e}")
@@ -69,14 +73,23 @@ class ConfigClient:
             raise Exception(f"No file found at {rendered_absolute_root_filepath}")
 
         if source_config.type is None:
+            import click
             source_config.type = click.prompt(text="Export type", type=click.Choice(['code', 'layer']))
         if source_config.format is None:
+            import click
             source_config.format = click.prompt(text="Format type", type=click.Choice(['zip', 'folder']))
+        if source_config.python_version is None:
+            from serverlesspack.serverlesspack.cli import PythonVersion
+            source_config.python_version = click.prompt(
+                text="For which Python version do you want to create the layer ?",
+                type=click.Choice([e.value for e in PythonVersion]),
+            )
 
         config = Config(
             root_filepath=rendered_absolute_root_filepath,
             project_root_dir=source_config.project_root_dir,
             type=source_config.type, format=source_config.format,
+            python_version=source_config.python_version,
             filepaths_includes=set(),
             folders_includes={},
             use_prototype_docker_pip_install=source_config.use_prototype_docker_pip_install
