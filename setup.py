@@ -3,7 +3,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="serverlesspack",
-    version="0.4.6",
+    version="0.4.7",
     packages=find_packages(),
     include_package_data=True,
     install_requires=["click", "PyYAML", "pydantic", "boto3", "distlib", "importlib-metadata", "colorama", "asciitree", "tqdm"],
