@@ -11,6 +11,8 @@ from typing import List, Optional, Set, Any, Literal, Tuple, Dict
 
 import distlib.database
 from pkg_resources import EggInfoDistribution
+
+from .configuration_client import BaseExcludeItem
 from .utils import get_serverless_pack_root_folder, message_with_vars
 
 
@@ -44,8 +46,12 @@ class Resolver:
     TARGETS_OS_LITERAL = Literal['windows', 'linux', None]
     OS_TO_COMPILED_EXTENSIONS = {WINDOWS_KEY: 'pyd', LINUX_KEY: 'so'}
 
-    def __init__(self, root_filepath: str, target_os: Optional[TARGETS_OS_LITERAL] = None, verbose: bool = False):
+    def __init__(
+            self, root_filepath: str, target_os: Optional[TARGETS_OS_LITERAL] = None,
+            global_exclusions: Optional[BaseExcludeItem] = None, verbose: bool = False
+    ):
         self.root_filepath = root_filepath
+        self.global_exclusions = global_exclusions
         self.verbose = verbose
 
         self._system_os = platform.system().lower()
@@ -168,15 +174,37 @@ class Resolver:
                 ))
                 return None
 
+    @staticmethod
+    def relative_path_is_in_absolute_path(relative_path: str, absolute_path: str) -> bool:
+        formatted_relative_path: str = str(Path(relative_path))
+        formatted_absolute_path: str = str(Path(absolute_path))
+        return formatted_relative_path in formatted_absolute_path
+
+    def filepath_is_globally_excluded(self, filepath: str) -> bool:
+        if self.global_exclusions is not None:
+            if self.global_exclusions.excluded_folders_names is not None:
+                for folder_name in self.global_exclusions.excluded_folders_names:
+                    if self.relative_path_is_in_absolute_path(relative_path=folder_name, absolute_path=filepath):
+                        return True
+
+            if self.global_exclusions.excluded_files_extensions is not None:
+                filepath_instance = Path(filepath)
+                if filepath_instance.suffix in self.global_exclusions.excluded_files_extensions:
+                    return True
+
+        return False
+
     def add_python_file(self, filepath: str):
         expected_init_filepath = os.path.join(os.path.dirname(filepath), "__init__.py")
         if expected_init_filepath not in self.included_files_absolute_paths:
-            if os.path.exists(expected_init_filepath):
-                self.included_files_absolute_paths.add(expected_init_filepath)
-                self.process_file(filepath=expected_init_filepath)
+            if not self.filepath_is_globally_excluded(filepath=expected_init_filepath):
+                if os.path.exists(expected_init_filepath):
+                    self.included_files_absolute_paths.add(expected_init_filepath)
+                    self.process_file(filepath=expected_init_filepath)
 
         if filepath not in self.included_files_absolute_paths:
-            self.included_files_absolute_paths.add(filepath)
+            if not self.filepath_is_globally_excluded(filepath=filepath):
+                self.included_files_absolute_paths.add(filepath)
 
     def add_package_by_name(self, package_name: str, current_filepath: str):
         imported_package_module = self._import_module(module_name=package_name, filepath=current_filepath)

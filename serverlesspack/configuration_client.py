@@ -24,7 +24,7 @@ class SourceConfig(BaseModel):
         additional_linux: Optional[BaseFolderIncludeItem] = None
         additional_windows: Optional[BaseFolderIncludeItem] = None
     folders_includes: Optional[Dict[str, Optional[FolderIncludeItem]]] = None
-    global_exclusions: Optional[BaseExcludeItem] = None  # todo: implement this
+    global_exclusions: Optional[BaseExcludeItem] = None
     use_prototype_docker_pip_install: Optional[bool] = False
 
 @dataclass
@@ -92,7 +92,7 @@ class ConfigClient:
             python_version=source_config.python_version,
             filepaths_includes=set(),
             folders_includes={},
-            global_exclusions=None,
+            global_exclusions=source_config.global_exclusions,
             use_prototype_docker_pip_install=source_config.use_prototype_docker_pip_install
         )
 

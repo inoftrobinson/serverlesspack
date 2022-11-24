@@ -75,7 +75,10 @@ def package_api(
 
     package_files_handler = safe_get_package_files_handler(format_type=config.format)
 
-    resolver = Resolver(root_filepath=config.root_filepath, target_os=target_os, verbose=verbose)
+    resolver = Resolver(
+        root_filepath=config.root_filepath, target_os=target_os,
+        global_exclusions=config.global_exclusions, verbose=verbose
+    )
     resolver.process_file(config.root_filepath)
 
     for filepath in config.filepaths_includes:
