@@ -43,7 +43,7 @@ def safe_get_package_files_handler(format_type: str):
 @click.option('-config', '--config_filepath', prompt="Filepath of config file", type=click.Path(exists=True))
 @click.option('-v', '--verbose', type=bool, required=False)
 @click.option('-f', '--format_type', type=click.Choice([e.value for e in FormatType]), required=False)
-@click.option('-pv', '--python_version', type=click.Choice([e.value for e in FormatType]), required=False)
+@click.option('-pv', '--python_version', type=click.Choice([e.value for e in PythonVersion]), required=False)
 @click.option('-t', '--should_save_trace_files', type=bool, required=False)
 def package_cli(
         target_os: str, config_filepath: str, verbose: bool = False,
