@@ -16,8 +16,8 @@ class BaseFolderIncludeItem(BaseExcludeItem):
 class SourceConfig(BaseModel):
     root_file: str
     project_root_dir: Optional[str] = None
-    type: Optional[Literal['code', 'layer']] = None
-    format: Optional[Literal['zip', 'folder']] = None
+    package_type: Optional[Literal['code', 'layer']] = None
+    output_type: Optional[Literal['zip', 'folder']] = None
     python_version: Optional[str] = None
     filepaths_includes: Optional[List[str]] = None
     class FolderIncludeItem(BaseFolderIncludeItem):
@@ -31,8 +31,8 @@ class SourceConfig(BaseModel):
 class Config:
     root_filepath: str
     project_root_dir: Optional[str]
-    type: Literal['code', 'layer']
-    format: Literal['zip', 'folder']
+    package_type: Literal['code', 'layer']
+    output_type: Literal['zip', 'folder']
     python_version: str
     filepaths_includes: Set[str]
     folders_includes: Dict[str, BaseFolderIncludeItem]
@@ -72,12 +72,12 @@ class ConfigClient:
         if not os.path.isfile(rendered_absolute_root_filepath):
             raise Exception(f"No file found at {rendered_absolute_root_filepath}")
 
-        if source_config.type is None:
+        if source_config.package_type is None:
             import click
-            source_config.type = click.prompt(text="Export type", type=click.Choice(['code', 'layer']))
-        if source_config.format is None:
+            source_config.package_type = click.prompt(text="Export type", type=click.Choice(['code', 'layer']))
+        if source_config.output_type is None:
             import click
-            source_config.format = click.prompt(text="Format type", type=click.Choice(['zip', 'folder']))
+            source_config.output_type = click.prompt(text="Format type", type=click.Choice(['zip', 'folder']))
         if source_config.python_version is None:
             from .cli import PythonVersion
             source_config.python_version = click.prompt(
@@ -88,7 +88,8 @@ class ConfigClient:
         config = Config(
             root_filepath=rendered_absolute_root_filepath,
             project_root_dir=source_config.project_root_dir,
-            type=source_config.type, format=source_config.format,
+            package_type=source_config.package_type,
+            output_type=source_config.output_type,
             python_version=source_config.python_version,
             filepaths_includes=set(),
             folders_includes={},
