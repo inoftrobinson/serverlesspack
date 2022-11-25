@@ -22,7 +22,7 @@ class PackageType(Enum):
 
 class OutputType(Enum):
     zip = 'zip'
-    code = 'code'
+    folder = 'folder'
 
 class PythonVersion(Enum):
     _36 = '3.6'
