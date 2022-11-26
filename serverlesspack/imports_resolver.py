@@ -146,7 +146,8 @@ class Resolver:
             # module name. This will work when trying to import libraries.
             return importlib.import_module(module_name)
         except ModuleNotFoundError as e:
-            self._verbose_print(message=str(e))
+            # self._verbose_print(message=str(e))  # Logging is disabled, as the module could be imported with the below system
+            
             # If this failed, we try to import the module as a file not inside a library. We do so by creating a relative
             # module path to the module from the current file, and we try to import the module from its relative path.
 
@@ -174,36 +175,16 @@ class Resolver:
                 ))
                 return None
 
-    @staticmethod
-    def relative_path_is_in_absolute_path(relative_path: str, absolute_path: str) -> bool:
-        formatted_relative_path: str = str(Path(relative_path))
-        formatted_absolute_path: str = str(Path(absolute_path))
-        return formatted_relative_path in formatted_absolute_path
-
-    def filepath_is_globally_excluded(self, filepath: str) -> bool:
-        if self.global_exclusions is not None:
-            if self.global_exclusions.excluded_folders_names is not None:
-                for folder_name in self.global_exclusions.excluded_folders_names:
-                    if self.relative_path_is_in_absolute_path(relative_path=folder_name, absolute_path=filepath):
-                        return True
-
-            if self.global_exclusions.excluded_files_extensions is not None:
-                filepath_instance = Path(filepath)
-                if filepath_instance.suffix in self.global_exclusions.excluded_files_extensions:
-                    return True
-
-        return False
-
     def add_python_file(self, filepath: str):
         expected_init_filepath = os.path.join(os.path.dirname(filepath), "__init__.py")
         if expected_init_filepath not in self.included_files_absolute_paths:
-            if not self.filepath_is_globally_excluded(filepath=expected_init_filepath):
+            if self.global_exclusions is None or not self.global_exclusions.path_is_excluded(path=expected_init_filepath):
                 if os.path.exists(expected_init_filepath):
                     self.included_files_absolute_paths.add(expected_init_filepath)
                     self.process_file(filepath=expected_init_filepath)
 
         if filepath not in self.included_files_absolute_paths:
-            if not self.filepath_is_globally_excluded(filepath=filepath):
+            if self.global_exclusions is None or not self.global_exclusions.path_is_excluded(path=filepath):
                 self.included_files_absolute_paths.add(filepath)
 
     def add_package_by_name(self, package_name: str, current_filepath: str):

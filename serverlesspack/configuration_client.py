@@ -8,6 +8,27 @@ from pydantic import ValidationError, BaseModel, Field
 class BaseExcludeItem(BaseModel):
     excluded_files_extensions: Optional[List[str]] = Field(default_factory=list)
     excluded_folders_names: Optional[List[str]] = Field(default_factory=list)
+    
+    @staticmethod
+    def relative_path_is_in_absolute_path(relative_path: str, absolute_path: str) -> bool:
+        from pathlib import Path
+        formatted_relative_path: str = str(Path(relative_path))
+        formatted_absolute_path: str = str(Path(absolute_path))
+        return formatted_relative_path in formatted_absolute_path
+
+    def path_is_excluded(self, path: str) -> bool:
+        if self.excluded_folders_names is not None:
+            for folder_name in self.excluded_folders_names:
+                if self.relative_path_is_in_absolute_path(relative_path=folder_name, absolute_path=path):
+                    return True
+
+        if self.excluded_files_extensions is not None:
+            from pathlib import Path
+            path_instance = Path(path)
+            if path_instance.suffix in self.excluded_files_extensions:
+                return True
+
+        return False
 
 class BaseFolderIncludeItem(BaseExcludeItem):
     included_files_extensions: Optional[List[str]] = None
@@ -24,6 +45,7 @@ class SourceConfig(BaseModel):
         additional_linux: Optional[BaseFolderIncludeItem] = None
         additional_windows: Optional[BaseFolderIncludeItem] = None
     folders_includes: Optional[Dict[str, Optional[FolderIncludeItem]]] = None
+    python_path_exclusions: Optional[BaseExcludeItem] = None
     global_exclusions: Optional[BaseExcludeItem] = None
     use_prototype_docker_pip_install: Optional[bool] = False
 
@@ -36,6 +58,7 @@ class Config:
     python_version: str
     filepaths_includes: Set[str]
     folders_includes: Dict[str, BaseFolderIncludeItem]
+    python_path_exclusions: Optional[BaseExcludeItem]
     global_exclusions: Optional[BaseExcludeItem]
     use_prototype_docker_pip_install: bool
 
@@ -93,6 +116,7 @@ class ConfigClient:
             python_version=source_config.python_version,
             filepaths_includes=set(),
             folders_includes={},
+            python_path_exclusions=source_config.python_path_exclusions,
             global_exclusions=source_config.global_exclusions,
             use_prototype_docker_pip_install=source_config.use_prototype_docker_pip_install
         )
