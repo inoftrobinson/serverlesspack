@@ -53,24 +53,28 @@ def safe_get_package_files_handler(output_type: str):
 @click.option('-ot', '--output_type', type=click.Choice([e.value for e in OutputType]), required=False)
 @click.option('-pv', '--python_version', type=click.Choice([e.value for e in PythonVersion]), required=False)
 @click.option('-t', '--should_save_trace_files', type=bool, required=False)
+@click.option('-dl', '--package_dependencies_in_layer_for_code_package', type=bool, required=False)
 def package_cli(
         target_os: str, config_filepath: str, verbose: bool = False,
         package_type: Optional[PackageType] = None, output_type: Optional[OutputType] = None,
         python_version: Optional[PythonVersion] = None,
-        should_save_trace_files: Optional[bool] = None
+        should_save_trace_files: Optional[bool] = None,
+        package_dependencies_in_layer_for_code_package: Optional[bool] = None
 ):
     package_api(
         target_os=target_os, config_filepath=config_filepath, verbose=verbose,
         package_type=package_type, output_type=output_type,
         python_version=python_version,
-        should_save_trace_files=should_save_trace_files
+        should_save_trace_files=should_save_trace_files,
+        package_dependencies_in_layer_for_code_package=package_dependencies_in_layer_for_code_package
     )
 
 def package_api(
         target_os: str, config_filepath: str, verbose: bool = False,
         output_type: Optional[OutputType] = None, package_type: Optional[PackageType] = None,
         python_version: Optional[PythonVersion] = None,
-        should_save_trace_files: Optional[bool] = None
+        should_save_trace_files: Optional[bool] = None,
+        package_dependencies_in_layer_for_code_package: Optional[bool] = None
 ) -> PackageApiOutput:
 
     if should_save_trace_files is None:
@@ -188,7 +192,13 @@ def package_api(
             code_output_path: str = package_files_handler(dist_dirpath, 'build', local_file_items, content_file_items)
             # We first package the applications files under the build key
 
-            if not click.confirm("Package your application dependencies as lambda layer ?"):
+            confirmed_package_dependencies_in_layer_for_code_package: bool = (
+                click.confirm("Package your application dependencies as lambda layer ?")
+                if package_dependencies_in_layer_for_code_package is None else
+                package_dependencies_in_layer_for_code_package
+            )
+
+            if not confirmed_package_dependencies_in_layer_for_code_package:
                 return PackageApiOutput(
                     code_path=code_output_path, layer_path=None,
                     required_dependencies_names=resolver.included_dependencies_names
