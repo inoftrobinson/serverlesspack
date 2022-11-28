@@ -325,6 +325,10 @@ def files_to_zip(root_path: str, destination_file_key: str, local_files_items: L
 def files_to_folder(root_path: str, destination_dirname: str, local_files_items: List[LocalFileItem], content_files_items: List[ContentFileItem]) -> str:
     destination_dirpath = os.path.join(root_path, destination_dirname)
 
+    if os.path.isdir(destination_dirpath):
+        print(f"Deleting content of {destination_dirpath}...")
+        shutil.rmtree(destination_dirpath)
+
     for local_file_item in tqdm(local_files_items, desc="Copying local files"):
         absolute_target_filepath = os.path.join(destination_dirpath, local_file_item.relative_filepath)
         absolute_target_parent_dirname = os.path.dirname(absolute_target_filepath)
