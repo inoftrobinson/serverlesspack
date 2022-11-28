@@ -1,11 +1,10 @@
-import ast
 import logging
 import os
 import shutil
 import subprocess
 import uuid
 from pathlib import Path
-from typing import List, Dict, Set, Optional, Tuple
+from typing import List, Dict, Set, Optional, Tuple, Union
 
 from asciitree import LeftAligned
 from pkg_resources import EggInfoDistribution
@@ -57,11 +56,31 @@ def make_base_python_layer_packages_dir(python_version: str) -> str:
 def make_absolute_python_layer_packages_dirpath(base_target_dirpath: str, python_version: str) -> str:
     return f"{base_target_dirpath}/{make_base_python_layer_packages_dir(python_version=python_version)}"
 
+RUNTIME_PROVIDED_PACKAGES_NAMES = ["boto3", "botocore"]
+def remove_runtime_provided_packages(packages_names: Union[Set[str], List[str]]):
+    set_packages_names: Set[str] = set(packages_names)
+    # Convert the packages_names list to a new set or create a copy
+    # of the packages_names set to avoid mutating the input variable.
+    for package_name in RUNTIME_PROVIDED_PACKAGES_NAMES:
+        if package_name in set_packages_names:
+            print(
+                f"Removed {package_name} as we expect it to be provided by the Lambda runtime."
+                f"Set should_remove_runtime_provided_packages to False in the config file to disable this feature."
+            )
+            set_packages_names.remove(package_name)
+    return set_packages_names
+
+
 def _construct_pip_install_packages_command(
-        packages_names: Set[str] or List[str], target_dirpath: str,
-        python_version: str, platform: Optional[str] = None
+        packages_names: Union[Set[str], List[str]], target_dirpath: str,
+        python_version: str, platform: Optional[str] = None,
+        should_remove_runtime_provided_packages: bool = True
 ) -> str:
-    packages_string: str = " ".join(packages_names)
+    cleaned_packages_names: Set[str] = (
+        remove_runtime_provided_packages(packages_names=packages_names)
+        if should_remove_runtime_provided_packages is True else packages_names
+    )
+    packages_string: str = " ".join(cleaned_packages_names)
 
     kwargs: Dict[str, Optional[str]] = {}
     kwargs['target'] = f'"{target_dirpath}"'
@@ -81,18 +100,21 @@ def _construct_pip_install_packages_command(
     return f'pip install {packages_string} {compiled_kwargs}'
 
 def download_packages_to_dir(
-        packages_names: Set[str] or List[str], target_dirpath: str,
-        python_version: str, platform: Optional[str] = None
+        packages_names: Union[Set[str], List[str]], target_dirpath: str,
+        python_version: str, platform: Optional[str] = None,
+        should_remove_runtime_provided_packages: bool = True
 ):
     pip_install_command: str = _construct_pip_install_packages_command(
         packages_names=packages_names, target_dirpath=target_dirpath,
-        python_version=python_version, platform=platform
+        python_version=python_version, platform=platform,
+        should_remove_runtime_provided_packages=should_remove_runtime_provided_packages
     )
     return subprocess.run(pip_install_command)
 
 def download_packages_to_dir_with_docker_container(
-        packages_names: Set[str] or List[str], target_dirpath: str,
-        python_version: str, platform: Optional[str] = None
+        packages_names: Union[Set[str], List[str]], target_dirpath: str,
+        python_version: str, platform: Optional[str] = None,
+        should_remove_runtime_provided_packages: bool = True
 ):
     def get_free_output_path():
         import os
@@ -115,7 +137,8 @@ def download_packages_to_dir_with_docker_container(
 
     pip_install_command: str = _construct_pip_install_packages_command(
         packages_names=packages_names, target_dirpath='/output',
-        python_version=python_version, platform=platform
+        python_version=python_version, platform=platform,
+        should_remove_runtime_provided_packages=should_remove_runtime_provided_packages
     )
     docker_wrapped_pip_install_command: str = (
         f'docker run --mount type=bind,source={source_path},target=/output "public.ecr.aws/sam/build-python{python_version}" /bin/sh -c "{pip_install_command}; exit"'
@@ -129,6 +152,20 @@ def download_packages_to_dir_with_docker_container(
 def package_files(included_files_absolute_paths: Set[str], output_base_dirpath: str, archive_prefix: Optional[str] = None) -> Tuple[List[LocalFileItem], List[ContentFileItem]]:
     local_files_items: List[LocalFileItem] = list()
     content_files_items: Dict[str, ContentFileItem] = dict()
+
+    if False:
+        def adjust_absolute_filepath_to_output_base_dirpath(absolute_filepath: str) -> str:
+            relative_filepath: str = os.path.relpath(absolute_filepath, output_base_dirpath)
+            relative_filepath_parts: Tuple[str, ...] = Path(relative_filepath).parts
+            adjusted_relative_filepath_parts: List[str] = [
+                part for part in relative_filepath_parts if part != '..'
+            ]
+            return os.path.join(*adjusted_relative_filepath_parts)
+
+        included_files_absolute_paths = set([
+            adjust_absolute_filepath_to_output_base_dirpath(absolute_filepath=absolute_filepath)
+            for absolute_filepath in included_files_absolute_paths
+        ])
 
     common_prefix_across_all_files = os.path.commonprefix([absolute_filepath for absolute_filepath in included_files_absolute_paths])
     if len(Path(output_base_dirpath).parts) > len(Path(common_prefix_across_all_files).parts):
@@ -198,7 +235,8 @@ def resolve_already_installed_dependencies(dependencies_distributions: Dict[str,
 
 def resolve_install_and_get_dependencies_files(
         resolver: Resolver, lambda_layer_dirpath: str, base_layer_dirpath: str,
-        python_version: str, use_prototype_docker_install: bool = False
+        python_version: str, use_prototype_docker_install: bool = False,
+        should_remove_runtime_provided_packages: bool = True
 ) -> List[LocalFileItem]:
     # requirements = PackagesLockClient().open_requirements("./requirements.txt")
     # todo: add support for requirements.txt instead of fully relying on dependencies
@@ -236,14 +274,16 @@ def resolve_install_and_get_dependencies_files(
                 packages_names=resolver.included_dependencies_names,
                 target_dirpath=lambda_layer_dirpath,
                 python_version=python_version,
-                platform=wheel_platform
+                platform=wheel_platform,
+                should_remove_runtime_provided_packages=should_remove_runtime_provided_packages
             )
         else:
             dependencies_installation_result = download_packages_to_dir_with_docker_container(
                 packages_names=resolver.included_dependencies_names,
                 target_dirpath=lambda_layer_dirpath,
                 python_version=python_version,
-                platform=wheel_platform
+                platform=wheel_platform,
+                should_remove_runtime_provided_packages=should_remove_runtime_provided_packages
             )
     dependencies_local_file_items = recursive_get_files_in_layer_folder(
         source_dirpath=lambda_layer_dirpath, base_layer_dirpath=base_layer_dirpath

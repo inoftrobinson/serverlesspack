@@ -48,6 +48,7 @@ class SourceConfig(BaseModel):
     python_path_exclusions: Optional[BaseExcludeItem] = None
     global_exclusions: Optional[BaseExcludeItem] = None
     use_prototype_docker_pip_install: Optional[bool] = False
+    should_remove_runtime_provided_packages: Optional[bool] = True
 
 @dataclass
 class Config:
@@ -61,6 +62,7 @@ class Config:
     python_path_exclusions: Optional[BaseExcludeItem]
     global_exclusions: Optional[BaseExcludeItem]
     use_prototype_docker_pip_install: bool
+    should_remove_runtime_provided_packages: bool
 
 
 class ConfigClient:
@@ -118,7 +120,8 @@ class ConfigClient:
             folders_includes={},
             python_path_exclusions=source_config.python_path_exclusions,
             global_exclusions=source_config.global_exclusions,
-            use_prototype_docker_pip_install=source_config.use_prototype_docker_pip_install
+            use_prototype_docker_pip_install=source_config.use_prototype_docker_pip_install,
+            should_remove_runtime_provided_packages=source_config.should_remove_runtime_provided_packages
         )
 
         if source_config.filepaths_includes is not None:

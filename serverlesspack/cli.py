@@ -164,7 +164,8 @@ def package_api(
                 lambda_layer_dirpath=lambda_layer_dirpath,
                 base_layer_dirpath=base_layer_dirpath,
                 python_version=config.python_version,
-                use_prototype_docker_install=config.use_prototype_docker_pip_install
+                use_prototype_docker_install=config.use_prototype_docker_pip_install,
+                should_remove_runtime_provided_packages=config.should_remove_runtime_provided_packages
             )
             # We package both the application files and the dependencies files under the
             # build key (which will output either a build.zip file or a build folder)
@@ -178,7 +179,7 @@ def package_api(
 
         elif config.package_type == 'code':
             # When packaging as code we package the application files without any archive_prefix, which we will then package.
-            # After that, was ask the user if he want to package his applications dependencies as a lambda layer.
+            # After that, was ask the user if he wants to package his applications dependencies as a lambda layer.
             base_layer_dirpath = make_base_python_layer_packages_dir(python_version=config.python_version)
             local_file_items, content_file_items = package_files(
                 included_files_absolute_paths=resolver.included_files_absolute_paths,
@@ -199,7 +200,8 @@ def package_api(
                     lambda_layer_dirpath=lambda_layer_dirpath,
                     base_layer_dirpath=base_layer_dirpath,
                     python_version=config.python_version,
-                    use_prototype_docker_install=config.use_prototype_docker_pip_install
+                    use_prototype_docker_install=config.use_prototype_docker_pip_install,
+                    should_remove_runtime_provided_packages=config.should_remove_runtime_provided_packages
                 )
                 lambda_layer_format_handler = safe_get_package_files_handler(output_type=config.output_type)
                 layer_output_path = lambda_layer_format_handler(dist_dirpath, 'lambda_layer', dependencies_local_file_items, [])
