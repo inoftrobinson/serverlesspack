@@ -146,7 +146,7 @@ class Resolver:
             # module name. This will work when trying to import libraries.
             return importlib.import_module(module_name)
         except ModuleNotFoundError as e:
-            self._verbose_print(message=str(e))  # Logging is disabled, as the module could be imported with the below system
+            self._verbose_print(message=str(e))
             
             # If this failed, we try to import the module as a file not inside a library. We do so by creating a relative
             # module path to the module from the current file, and we try to import the module from its relative path.
@@ -157,14 +157,9 @@ class Resolver:
             # to the file trying to import the module. This relative filepath is not destined to be used in the archive paths when packaging the code.
 
             module_path = self._path_to_module_path(base_path=os.path.abspath(filepath_relative_to_current_module), module_name=module_name)
-            # module_path, module_package = self._path_to_module_path(base_path=str(filepath_relative_to_current_module), module_name=module_name)
 
             try:
-                """if module_path is not None and module_package is not None:
-                    return importlib.import_module(name=module_path, package=module_package)"""
-
-                # todo: this system is broken
-                module_spec = importlib.util.spec_from_file_location(module_name, filepath)  # filepath_relative_to_current_module)
+                module_spec = importlib.util.spec_from_file_location(module_path, filepath)
                 return importlib.util.module_from_spec(module_spec) if module_spec is not None else None
             except ModuleNotFoundError as e:
                 # If both the import as a library and as a file unfortunately
