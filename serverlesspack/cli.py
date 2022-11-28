@@ -15,6 +15,7 @@ from .packager import ContentFileItem, LocalFileItem, make_base_python_layer_pac
 class PackageApiOutput:
     code_path: str
     layer_path: Optional[str]
+    required_dependencies_names: Set[str]
 
 class PackageType(Enum):
     code = 'code'
@@ -170,7 +171,10 @@ def package_api(
             code_and_dependencies_output_path = package_files_handler(
                 dist_dirpath, 'build', [*local_file_items, *dependencies_local_file_items], content_file_items
             )
-            return PackageApiOutput(code_path=code_and_dependencies_output_path, layer_path=None)
+            return PackageApiOutput(
+                code_path=code_and_dependencies_output_path, layer_path=None,
+                required_dependencies_names=resolver.included_dependencies_names
+            )
 
         elif config.package_type == 'code':
             # When packaging as code we package the application files without any archive_prefix, which we will then package.
@@ -184,7 +188,10 @@ def package_api(
             # We first package the applications files under the build key
 
             if not click.confirm("Package your application dependencies as lambda layer ?"):
-                return PackageApiOutput(code_path=code_output_path, layer_path=None)
+                return PackageApiOutput(
+                    code_path=code_output_path, layer_path=None,
+                    required_dependencies_names=resolver.included_dependencies_names
+                )
             else:
                 lambda_layer_dirpath = os.path.join(dist_dirpath, 'lambda_layer')
                 dependencies_local_file_items = resolve_install_and_get_dependencies_files(
@@ -198,7 +205,10 @@ def package_api(
                 layer_output_path = lambda_layer_format_handler(dist_dirpath, 'lambda_layer', dependencies_local_file_items, [])
                 # Then, if the user asked to package his dependencies, we package them under the lambda_layer
                 # key (which will output either a lambda_layer.zip file or a lambda_layer folder)
-                return PackageApiOutput(code_path=code_output_path, layer_path=layer_output_path)
+                return PackageApiOutput(
+                    code_path=code_output_path, layer_path=layer_output_path,
+                    required_dependencies_names=resolver.included_dependencies_names
+                )
         else:
             raise Exception(f"Package type of {config.package_type} not supported")
 

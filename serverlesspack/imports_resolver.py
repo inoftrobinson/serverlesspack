@@ -146,7 +146,7 @@ class Resolver:
             # module name. This will work when trying to import libraries.
             return importlib.import_module(module_name)
         except ModuleNotFoundError as e:
-            # self._verbose_print(message=str(e))  # Logging is disabled, as the module could be imported with the below system
+            self._verbose_print(message=str(e))  # Logging is disabled, as the module could be imported with the below system
             
             # If this failed, we try to import the module as a file not inside a library. We do so by creating a relative
             # module path to the module from the current file, and we try to import the module from its relative path.
@@ -156,7 +156,7 @@ class Resolver:
             # We need a filepath relative to the current module, in order to try to import the file module. All the imports done in a file must be relative
             # to the file trying to import the module. This relative filepath is not destined to be used in the archive paths when packaging the code.
 
-            module_path = self._path_to_module_path(base_path=filepath_relative_to_current_module, module_name=module_name)
+            module_path = self._path_to_module_path(base_path=os.path.abspath(filepath_relative_to_current_module), module_name=module_name)
             # module_path, module_package = self._path_to_module_path(base_path=str(filepath_relative_to_current_module), module_name=module_name)
 
             try:
@@ -279,10 +279,11 @@ class Resolver:
             raise Exception(f"Filepath does not exist : {filepath}")
 
         if path_filepath.suffix == '.py':
-            with open(str(path_filepath), mode='r', encoding='utf-8') as file:
-                file_content = file.read()
-            for node in ast.iter_child_nodes(ast.parse(file_content)):
-                self.process_node(node=node, current_module=filepath, current_filepath=filepath)
+            if self.global_exclusions is None or not self.global_exclusions.path_is_excluded(path=filepath):
+                with open(str(path_filepath), mode='r', encoding='utf-8') as file:
+                    file_content = file.read()
+                for node in ast.iter_child_nodes(ast.parse(file_content)):
+                    self.process_node(node=node, current_module=filepath, current_filepath=filepath)
         else:
             self.add_python_file(filepath=filepath)
 
