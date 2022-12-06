@@ -140,6 +140,21 @@ class Resolver:
             return f"{'.'.join(cleaned_module_name_parts)}"
         return None
 
+    @staticmethod
+    def get_module_path_v2(filepath: str, module_name: str) -> Optional[str]:
+        module_path_parts_2 = module_name.split(".")
+        module_path_constructed = "/".join(module_path_parts_2[:-1]) + ".py"
+
+        filepath_parts = Path(filepath).parts
+        for i_part in range(len(filepath_parts)):
+            start_paths = filepath_parts[0:(len(filepath_parts) - (i_part+1))]
+            # Inverse path access, to always make sure to take the closest looking packages
+            merged_path: str = os.path.join(*start_paths, module_path_constructed)
+            if os.path.exists(merged_path):
+                return merged_path
+
+        return None
+
     def _import_module(self, module_name: str, filepath: str) -> Optional[ModuleType]:
         try:
             # We first try to import the module naively with only their
@@ -157,6 +172,10 @@ class Resolver:
             # to the file trying to import the module. This relative filepath is not destined to be used in the archive paths when packaging the code.
 
             module_path = self._path_to_module_path(base_path=os.path.abspath(filepath_relative_to_current_module), module_name=module_name)
+
+            module_path_v2 = self.get_module_path_v2(filepath=filepath, module_name=module_name)
+            if module_path_v2 is not None:
+                module_path = module_path_v2
 
             try:
                 module_spec = importlib.util.spec_from_file_location(module_path, filepath)
